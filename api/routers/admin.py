@@ -1,45 +1,59 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from pydantic import BaseModel
-from database import get_squads_collection
 from typing import List
+from sqlalchemy.future import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from database import get_db, GlobalSquad
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 class SquadCreate(BaseModel):
-    name: str
-    tags: List[str]
+    name: str # Canonical Name
+    tags: List[str] # List of tags/aliases
 
 @router.post("/squads")
-async def add_squad(squad: SquadCreate):
-    collection = await get_squads_collection()
-    
+async def add_squad(squad: SquadCreate, db: AsyncSession = Depends(get_db)):
     # Check if squad with this name already exists
-    existing = await collection.find_one({"name": squad.name})
+    stmt = select(GlobalSquad).where(GlobalSquad.name == squad.name)
+    result = await db.execute(stmt)
+    existing = result.scalars().first()
+    
     if existing:
         # Update existing squad tags
-        await collection.update_one(
-            {"name": squad.name},
-            {"$set": {"tags": squad.tags}}
-        )
-        return {"message": "Squad updated", "squad": squad.name, "tags": squad.tags}
+        existing.tags = squad.tags
+        await db.commit()
+        await db.refresh(existing)
+        return {"message": "Squad updated", "squad": existing.name, "tags": existing.tags}
     
-    await collection.insert_one({
-        "name": squad.name,
-        "tags": squad.tags
-    })
-    return {"message": "Squad added", "squad": squad.name, "tags": squad.tags}
+    new_squad = GlobalSquad(name=squad.name, tags=squad.tags)
+    db.add(new_squad)
+    await db.commit()
+    await db.refresh(new_squad)
+    return {"message": "Squad added", "squad": new_squad.name, "tags": new_squad.tags}
 
 @router.get("/squads")
-async def get_squads():
-    collection = await get_squads_collection()
-    cursor = collection.find({}, {"_id": 0})
-    squads = await cursor.to_list(length=1000)
-    return squads
+async def get_squads(db: AsyncSession = Depends(get_db)):
+    stmt = select(GlobalSquad).order_by(GlobalSquad.name)
+    result = await db.execute(stmt)
+    squads = result.scalars().all()
+    
+    output = []
+    for s in squads:
+        output.append({
+            "name": s.name,
+            "tags": s.tags if s.tags else []
+        })
+    return output
 
 @router.delete("/squads/{name}")
-async def delete_squad(name: str):
-    collection = await get_squads_collection()
-    result = await collection.delete_one({"name": name})
-    if result.deleted_count == 0:
+async def delete_squad(name: str, db: AsyncSession = Depends(get_db)):
+    stmt = select(GlobalSquad).where(GlobalSquad.name == name)
+    result = await db.execute(stmt)
+    existing = result.scalars().first()
+    
+    if not existing:
         raise HTTPException(status_code=404, detail="Squad not found")
+        
+    await db.delete(existing)
+    await db.commit()
     return {"message": "Squad deleted"}

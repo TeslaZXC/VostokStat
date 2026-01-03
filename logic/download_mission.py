@@ -5,13 +5,25 @@ from time import sleep
 from datetime import datetime, timedelta
 
 from logic.mission_pars import process_ocap
-from config import *
+from database import get_app_config_sync
 
-OCAPS_PATH.mkdir(exist_ok=True)
-TEMP_PATH.mkdir(exist_ok=True)
-
+DEFAULT_OCAPS_URL = 'http://185.236.20.167:5000/api/v1/operations'
+DEFAULT_OCAP_URL = 'http://185.236.20.167:5000/data/%s'
 
 def download_new_ocaps(mode="init"):
+    # Get config from DB
+    ocaps_url = get_app_config_sync("OCAPS_URL", DEFAULT_OCAPS_URL)
+    ocap_url_template = get_app_config_sync("OCAP_URL", DEFAULT_OCAP_URL)
+    
+    ocaps_path_str = get_app_config_sync("OCAPS_PATH_STR", "ocaps")
+    temp_path_str = get_app_config_sync("TEMP_PATH_STR", "temp")
+    
+    OCAPS_PATH = Path(ocaps_path_str)
+    TEMP_PATH = Path(temp_path_str)
+    
+    OCAPS_PATH.mkdir(exist_ok=True)
+    TEMP_PATH.mkdir(exist_ok=True)
+
     today = datetime.today().date()
     older_date = "2099-12-12"
 
@@ -28,8 +40,8 @@ def download_new_ocaps(mode="init"):
         "older": older_date
     }
     
-    print(f"Запрос миссий: {OCAPS_URL} с параметрами {params}")
-    response = requests.get(OCAPS_URL, params=params)
+    print(f"Запрос миссий: {ocaps_url} с параметрами {params}")
+    response = requests.get(ocaps_url, params=params)
     response.raise_for_status()
     ocaps_list = response.json()
 
@@ -75,7 +87,7 @@ def download_new_ocaps(mode="init"):
         filepath = OCAPS_PATH / new_filename
         try:
             print(f"Скачиваем: {new_filename}")
-            r = requests.get(OCAP_URL % ocap["filename"])
+            r = requests.get(ocap_url_template % ocap["filename"])
             r.raise_for_status()
             filepath.write_text(r.text, encoding="utf-8")
             sleep(1)

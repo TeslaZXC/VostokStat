@@ -1,179 +1,134 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from database import get_mission_collection, get_squads_collection
+from sqlalchemy.future import select
+from sqlalchemy import func, case, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+from database import get_db, MissionSquadStat, GlobalSquad, PlayerStat
 from api.schemas import SquadAggregatedStats, SquadDetailedStats
 
 router = APIRouter(prefix="/squads", tags=["squads"])
 
 @router.get("/top", response_model=List[SquadAggregatedStats])
-async def get_top_squads():
-    # 1. Get whitelist of current squads (groups)
-    squads_col = await get_squads_collection()
-    cursor = squads_col.find({}, {"name": 1})
-    whitelist_docs = await cursor.to_list(length=1000)
-    # The whitelist logic stores keys in lower case in parsing, but here storing canonical Name?
-    # In mission_pars.py, we store canonical name in `player['squad']` AND `squads_stats` keys.
-    # So we should match against the `name` field from admin panel.
-    whitelist = [d.get("name") for d in whitelist_docs if d.get("name")]
+async def get_top_squads(db: AsyncSession = Depends(get_db)):
+    # 1. Get whitelist of valid squads
+    stmt_whitelist = select(GlobalSquad)
+    res_whitelist = await db.execute(stmt_whitelist)
+    all_qs = res_whitelist.scalars().all()
     
-    if not whitelist:
+    # Flatten names/tags to a set for filtering
+    whitelist_names = set()
+    for s in all_qs:
+        if s.name:
+            whitelist_names.add(s.name)
+            # Should we add tags? MissionSquadStat uses tags if canonical?
+            # mission_pars logic: if tag is known, it saves canonical name in 'squad_tag'?
+            # Wait, `squads_stats[squad_tag]` where `squad_tag` comes from player['squad'].
+            # And player['squad'] is mapped to canonical name if found.
+            # So `MissionSquadStat.squad_tag` SHOULD hold the canonical Name.
+    
+    if not whitelist_names:
         return []
 
-    collection = await get_mission_collection()
+    # 2. Aggregate MissionSquadStat
+    # Filter by squad_tag IN whitelist
     
-    pipeline = [
-        # Pre-filter documents that have at least one valid squad to speed up unwind? 
-        # Actually MongoDB optimization might handle it, but explicit match is safe.
-        {"$match": {"squads.squad_tag": {"$in": whitelist}}},
-        {"$unwind": "$squads"},
-        {"$match": {"squads.squad_tag": {"$in": whitelist}}},
-        
-        {"$group": {
-            "_id": "$squads.squad_tag", 
-            "total_missions": {"$sum": 1},
-            "total_frags": {"$sum": "$squads.frags"},
-            "total_deaths": {"$sum": "$squads.death"}
-        }},
-        
-        # Filter out squads with very few games if necessary, e.g. < 3
-        # {"$match": {"total_missions": {"$gte": 3}}},
+    kd_expr = case(
+        (func.sum(MissionSquadStat.death) > 0, func.sum(MissionSquadStat.frags) / func.sum(MissionSquadStat.death)),
+        else_=func.sum(MissionSquadStat.frags)
+    ).label("kd_ratio")
 
-        {
-            "$addFields": {
-                "kd_ratio": {
-                    "$cond": [
-                        {"$gt": ["$total_deaths", 0]},
-                        {"$divide": ["$total_frags", "$total_deaths"]},
-                        "$total_frags"
-                    ]
-                }
-            }
-        },
-        {"$sort": {"kd_ratio": -1}},
-        {"$limit": 50}
-    ]
+    stmt = (
+        select(
+            MissionSquadStat.squad_tag,
+            func.count(MissionSquadStat.mission_id).label("total_missions"),
+            func.sum(MissionSquadStat.frags).label("total_frags"),
+            func.sum(MissionSquadStat.death).label("total_deaths"),
+            kd_expr
+        )
+        .where(MissionSquadStat.squad_tag.in_(whitelist_names))
+        .group_by(MissionSquadStat.squad_tag)
+        .order_by(desc("kd_ratio"))
+        .limit(50)
+    )
     
-    cursor = collection.aggregate(pipeline)
-    results = await cursor.to_list(length=50)
+    result = await db.execute(stmt)
+    rows = result.all()
     
     output = []
-    for r in results:
+    for r in rows:
         output.append({
-            "squad_name": r["_id"],
-            "total_missions": r["total_missions"],
-            "total_frags": r["total_frags"],
-            "total_deaths": r["total_deaths"],
-            "kd_ratio": round(r["kd_ratio"], 2)
+            "squad_name": r.squad_tag,
+            "total_missions": r.total_missions,
+            "total_frags": r.total_frags,
+            "total_deaths": r.total_deaths,
+            "kd_ratio": round(r.kd_ratio, 2)
         })
         
     return output
-        
+
 @router.get("/{squad_name}", response_model=SquadDetailedStats)
-async def get_squad_stats(squad_name: str):
-    collection = await get_mission_collection()
+async def get_squad_stats(squad_name: str, db: AsyncSession = Depends(get_db)):
+    # To get detailed stats, we want to aggregate PLAYERS who played in this squad.
+    # PlayerStat has 'squad' column which is canonical name (if mapped) or tag.
+    
     squad_lower = squad_name.lower()
     
-    pipeline = [
-        {"$match": {"players.squad": {"$regex": f"^{squad_lower}$", "$options": "i"}}},
-        {"$unwind": "$players"},
-        {"$match": {"players.squad": {"$regex": f"^{squad_lower}$", "$options": "i"}}},
-        
-        {"$group": {
-            "_id": "$players.name",
-            "total_missions": {"$sum": 1},
-            "total_frags": {"$sum": "$players.frags"},
-            "total_frags_veh": {"$sum": "$players.frags_veh"},
-            "total_frags_inf": {"$sum": "$players.frags_inf"},
-            "total_deaths": {"$sum": "$players.death"},
-            "total_destroyed_vehicles": {"$sum": "$players.destroyed_veh"}
-        }},
-        {"$sort": {"total_missions": -1}},
-        
-        {"$group": {
-            "_id": None,
-            "total_missions": {"$sum": "$total_missions"}, # This sums member missions, which effectively is total man-missions. 
-            # Wait, squad total missions is different from sum of man-missions.
-            # But usually for squad stats "missions" means "missions the squad participated in".
-            # Aggregating by player loses the unique mission count for the squad itself.
-            # But the request says "отдельная статистика отрядов, там будут указываться все игроки отрядов и их статистика".
-            # If I want true Squad Missions count, I need a different facet. 
-            # But typically sum of frags is correct.
-            # For simplicity/correctness of "Squad total missions", we should count unique missions where ANY player of this squad played.
-            # But with this pipeline, we have grouped by player.
-            # Let's start with just player list aggregation and we can sum up frags/deaths. 
-            # For "Squad Total Missions", strictly speaking it's "how many mission files".
-            # I can compute that separately or use a facet.
-            
-            "players": {"$push": {
-                "name": "$_id",
-                "total_missions": "$total_missions",
-                "total_frags": "$total_frags",
-                "total_frags_veh": "$total_frags_veh",
-                "total_frags_inf": "$total_frags_inf",
-                "total_deaths": "$total_deaths",
-                "total_destroyed_vehicles": "$total_destroyed_vehicles"
-            }},
-            "grand_total_frags": {"$sum": "$total_frags"},
-            "grand_total_deaths": {"$sum": "$total_deaths"}
-        }}
-    ]
+    # 1. Aggregate Players
+    stmt_players = (
+        select(
+            PlayerStat.name,
+            func.count(PlayerStat.mission_id).label("total_missions"),
+            func.sum(PlayerStat.frags).label("total_frags"),
+            func.sum(PlayerStat.frags_veh).label("total_frags_veh"),
+            func.sum(PlayerStat.frags_inf).label("total_frags_inf"),
+            func.sum(PlayerStat.death).label("total_deaths"),
+            func.sum(PlayerStat.destroyed_veh).label("total_destroyed_vehicles")
+        )
+        .filter(func.lower(PlayerStat.squad) == squad_lower)
+        .group_by(PlayerStat.name)
+        .order_by(desc("total_missions"))
+    )
     
-    # We also need the real unique mission count for the squad.
-    # Parallel query or FaceT?
-    # Let's do a Facet to be clean.
+    res_players = await db.execute(stmt_players)
+    players_rows = res_players.all()
     
-    pipeline = [
-        {"$match": {"players.squad": {"$regex": f"^{squad_name}$", "$options": "i"}}},
-        {"$facet": {
-            "squad_meta": [
-                {"$count": "count"}
-            ],
-            "players_agg": [
-                {"$unwind": "$players"},
-                {"$match": {"players.squad": {"$regex": f"^{squad_name}$", "$options": "i"}}},
-                {"$group": {
-                    "_id": "$players.name",
-                    "total_missions": {"$sum": 1},
-                    "total_frags": {"$sum": "$players.frags"},
-                    "total_frags_veh": {"$sum": "$players.frags_veh"},
-                    "total_frags_inf": {"$sum": "$players.frags_inf"},
-                    "total_deaths": {"$sum": "$players.death"},
-                    "total_destroyed_vehicles": {"$sum": "$players.destroyed_veh"}
-                }},
-                {"$sort": {"total_missions": -1}}
-            ]
-        }}
-    ]
+    if not players_rows:
+        # Check if squad exists in GlobalSquads just to be sure or return 404?
+        # Or check if there are any MissionSquadStat for summary?
+        # If no players found, maybe it's empty stats.
+        pass
+
+    # 2. Get Squad Meta (Total missions for squad itself)
+    # Count unique missions where this squad appeared
+    stmt_meta = (
+        select(func.count(MissionSquadStat.id))
+        .filter(func.lower(MissionSquadStat.squad_tag) == squad_lower)
+    )
+    res_meta = await db.execute(stmt_meta)
+    squad_total_missions = res_meta.scalar_one()
     
-    cursor = collection.aggregate(pipeline)
-    result = await cursor.to_list(length=1)
-    
-    if not result or (not result[0]["squad_meta"] and not result[0]["players_agg"]):
+    if squad_total_missions == 0 and not players_rows:
         raise HTTPException(status_code=404, detail="Squad not found")
-        
-    data = result[0]
-    squad_missions_count = data["squad_meta"][0]["count"] if data["squad_meta"] else 0
-    players_data = data["players_agg"]
-    
+
     players_list = []
     grand_frags = 0
     grand_deaths = 0
     
-    for p in players_data:
-        deaths = p["total_deaths"]
-        kd = round(p["total_frags"] / deaths, 2) if deaths > 0 else float(p["total_frags"])
+    for p in players_rows:
+        deaths = p.total_deaths or 0
+        kd = round(p.total_frags / deaths, 2) if deaths > 0 else float(p.total_frags)
         
-        grand_frags += p["total_frags"]
+        grand_frags += p.total_frags or 0
         grand_deaths += deaths
         
         players_list.append({
-            "name": p["_id"],
-            "total_missions": p["total_missions"],
-            "total_frags": p["total_frags"],
-            "total_frags_veh": p["total_frags_veh"],
-            "total_frags_inf": p["total_frags_inf"],
-            "total_deaths": p["total_deaths"],
-            "total_destroyed_vehicles": p["total_destroyed_vehicles"],
+            "name": p.name,
+            "total_missions": p.total_missions,
+            "total_frags": p.total_frags,
+            "total_frags_veh": p.total_frags_veh or 0,
+            "total_frags_inf": p.total_frags_inf or 0,
+            "total_deaths": deaths,
+            "total_destroyed_vehicles": p.total_destroyed_vehicles or 0,
             "kd_ratio": kd
         })
         
@@ -181,7 +136,7 @@ async def get_squad_stats(squad_name: str):
     
     return {
         "squad_name": squad_name,
-        "total_missions": squad_missions_count,
+        "total_missions": squad_total_missions,
         "total_frags": grand_frags,
         "total_deaths": grand_deaths,
         "kd_ratio": squad_kd,

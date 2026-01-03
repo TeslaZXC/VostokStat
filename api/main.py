@@ -7,6 +7,7 @@ import time
 from fastapi.staticfiles import StaticFiles
 from api.routers import missions, players, squads, admin
 from logic.download_mission import main as download_main
+from database import init_db
 
 
 # Background task to run the download logic
@@ -36,6 +37,7 @@ async def background_mission_updater():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    await init_db()
     task = asyncio.create_task(background_mission_updater())
     yield
     # Shutdown
@@ -46,6 +48,33 @@ async def lifespan(app: FastAPI):
         print("Background updater cancelled.")
 
 app = FastAPI(title="VostokStat API", lifespan=lifespan)
+
+# Admin Interface
+from sqladmin import Admin
+from database import engine
+from api.admin_views import (
+    MissionAdmin, PlayerStatAdmin, MissionSquadStatAdmin, GlobalSquadAdmin, 
+    MergePlayersView, AppConfigAdmin, AdminUserAdmin
+)
+from api.admin_auth import AdminAuth
+from starlette.middleware.sessions import SessionMiddleware
+import os
+
+# Add Session Middleware for Auth
+app.add_middleware(SessionMiddleware, secret_key="vostok-secret-key-secure")
+
+# Initialize Auth Backend
+authentication_backend = AdminAuth(secret_key="vostok-secret-key-secure")
+
+templates_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+admin_app = Admin(app, engine, templates_dir=templates_dir, authentication_backend=authentication_backend)
+admin_app.add_view(MissionAdmin)
+admin_app.add_view(PlayerStatAdmin)
+admin_app.add_view(MissionSquadStatAdmin)
+admin_app.add_view(GlobalSquadAdmin)
+admin_app.add_view(AppConfigAdmin)
+admin_app.add_view(AdminUserAdmin)
+admin_app.add_view(MergePlayersView)
 
 # CORS configuration
 origins = [

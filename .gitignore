@@ -28,7 +28,8 @@ MANIFEST
 ocaps/
 maps/
 data/
-
+node_modules/
+vostokstat.db
 verify_import.py
 requirements_fastapi.txt
 

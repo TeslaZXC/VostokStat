@@ -1,11 +1,13 @@
 import os
 import json
-from config import *
+import json
+from database import get_app_config_sync
 
 def ocap_coords(x, y, map_name, display_size=256, trim=0, zoom=8):
     map_data = {"worldSize": 10000, "multiplier": 1}
-
-    map_dir = os.path.join(BASE_MAPS_PATH, map_name)
+    
+    base_maps_path = get_app_config_sync("BASE_MAPS_PATH", "maps")
+    map_dir = os.path.join(base_maps_path, map_name)
     if os.path.isdir(map_dir):
         subdirs = [d for d in os.listdir(map_dir) if os.path.isdir(os.path.join(map_dir, d))]
         if len(subdirs) == 1:

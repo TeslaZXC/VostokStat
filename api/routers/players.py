@@ -1,179 +1,152 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
-from database import get_mission_collection
+from sqlalchemy.future import select
+from sqlalchemy import func, case, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+from database import get_db, PlayerStat
 from api.schemas import PlayerAggregatedStats
 
 router = APIRouter(prefix="/players", tags=["players"])
 
 @router.get("/search/{name}")
-async def search_player(name: str):
-    # This is a bit expensive if not indexed properly, ideally we'd have a separate players collection
-    collection = await get_mission_collection()
-    pipeline = [
-        {"$unwind": "$players"},
-        {"$match": {"players.name": {"$regex": name, "$options": "i"}}},
-        {"$group": {"_id": "$players.name"}},
-        {"$limit": 10}
-    ]
-    cursor = collection.aggregate(pipeline)
-    result = await cursor.to_list(length=10)
-    return [r["_id"] for r in result]
+async def search_player(name: str, db: AsyncSession = Depends(get_db)):
+    stmt = (
+        select(PlayerStat.name)
+        .filter(PlayerStat.name.ilike(f"%{name}%"))
+        .distinct()
+        .limit(10)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 @router.get("/{player_name_or_id}", response_model=PlayerAggregatedStats)
-async def get_player_stats(player_name_or_id: str):
-    collection = await get_mission_collection()
+async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(get_db)):
     name_lower = player_name_or_id.lower()
     
-    match_stage = {"players.name": name_lower}
+    # 1. Check if exists and get total stats
+    # Group by nothing (aggregate all matches)
+    stmt_total = (
+        select(
+            func.count(PlayerStat.mission_id).label("total_missions"),
+            func.sum(PlayerStat.frags).label("total_frags"),
+            func.sum(PlayerStat.frags_veh).label("total_frags_veh"),
+            func.sum(PlayerStat.frags_inf).label("total_frags_inf"),
+            func.sum(PlayerStat.death).label("total_deaths"),
+            func.sum(PlayerStat.destroyed_veh).label("total_destroyed_vehicles")
+        )
+        .filter(func.lower(PlayerStat.name) == name_lower)
+    )
     
-    pipeline = [
-        {"$match": match_stage},
-        {"$unwind": "$players"},
-        {"$match": {"players.name": name_lower}},
-        
-        # 1. Group by Squad first
-        {
-            "$group": {
-                "_id": {
-                    "name": "$players.name",
-                    "squad": "$players.squad"
-                },
-                "total_missions": {"$sum": 1},
-                "total_frags": {"$sum": "$players.frags"},
-                "total_frags_veh": {"$sum": "$players.frags_veh"},
-                "total_frags_inf": {"$sum": "$players.frags_inf"},
-                "total_deaths": {"$sum": "$players.death"},
-                "total_destroyed_vehicles": {"$sum": "$players.destroyed_veh"}
-            }
-        },
-        
-        # 2. Group by Player to aggregate totals and build valid squad list
-        {
-            "$group": {
-                "_id": "$_id.name",
-                "total_missions": {"$sum": "$total_missions"},
-                "total_frags": {"$sum": "$total_frags"},
-                "total_frags_veh": {"$sum": "$total_frags_veh"},
-                "total_frags_inf": {"$sum": "$total_frags_inf"},
-                "total_deaths": {"$sum": "$total_deaths"},
-                "total_destroyed_vehicles": {"$sum": "$total_destroyed_vehicles"},
-                "squads": {
-                    "$push": {
-                        "squad": "$_id.squad",
-                        "total_missions": "$total_missions",
-                        "total_frags": "$total_frags",
-                        "total_frags_veh": "$total_frags_veh",
-                        "total_frags_inf": "$total_frags_inf",
-                        "total_deaths": "$total_deaths",
-                        "total_destroyed_vehicles": "$total_destroyed_vehicles",
-                    }
-                }
-            }
-        }
-    ]
+    result = await db.execute(stmt_total)
+    total_stats = result.one_or_none()
     
-    cursor = collection.aggregate(pipeline)
-    result = await cursor.to_list(length=1)
+    # If count is 0/None, player not found
+    if not total_stats or not total_stats.total_missions:
+         raise HTTPException(status_code=404, detail="Player not found")
+         
+    # 2. Get stats per squad
+    stmt_squads = (
+        select(
+            PlayerStat.squad,
+            func.count(PlayerStat.mission_id).label("total_missions"),
+            func.sum(PlayerStat.frags).label("total_frags"),
+            func.sum(PlayerStat.frags_veh).label("total_frags_veh"),
+            func.sum(PlayerStat.frags_inf).label("total_frags_inf"),
+            func.sum(PlayerStat.death).label("total_deaths"),
+            func.sum(PlayerStat.destroyed_veh).label("total_destroyed_vehicles")
+        )
+        .filter(func.lower(PlayerStat.name) == name_lower)
+        .group_by(PlayerStat.squad)
+        .order_by(desc("total_missions"))
+    )
     
-    if not result:
-        raise HTTPException(status_code=404, detail="Player not found")
-        
-    stats = result[0]
-    total_deaths = stats["total_deaths"]
-    kd_ratio = round(stats["total_frags"] / total_deaths, 2) if total_deaths > 0 else float(stats["total_frags"])
+    squad_results = await db.execute(stmt_squads)
+    squads_rows = squad_results.all()
     
-    # Process squads to add KD and handle None squads if any
+    # Process Results
+    t_frags = total_stats.total_frags or 0
+    t_deaths = total_stats.total_deaths or 0
+    kd_ratio = round(t_frags / t_deaths, 2) if t_deaths > 0 else float(t_frags)
+    
     squads_list = []
-    for s in stats.get("squads", []):
-        s_deaths = s["total_deaths"]
-        s_kd = round(s["total_frags"] / s_deaths, 2) if s_deaths > 0 else float(s["total_frags"])
+    for r in squads_rows:
+        s_frags = r.total_frags or 0
+        s_deaths = r.total_deaths or 0
+        s_kd = round(s_frags / s_deaths, 2) if s_deaths > 0 else float(s_frags)
         
         squads_list.append({
-            "squad": s["squad"] if s["squad"] else "No Squad",
-            "total_missions": s["total_missions"],
-            "total_frags": s["total_frags"],
-            "total_frags_veh": s["total_frags_veh"],
-            "total_frags_inf": s["total_frags_inf"],
-            "total_deaths": s["total_deaths"],
-            "total_destroyed_vehicles": s["total_destroyed_vehicles"],
+            "squad": r.squad if r.squad else "No Squad",
+            "total_missions": r.total_missions,
+            "total_frags": s_frags,
+            "total_frags_veh": r.total_frags_veh or 0,
+            "total_frags_inf": r.total_frags_inf or 0,
+            "total_deaths": s_deaths,
+            "total_destroyed_vehicles": r.total_destroyed_vehicles or 0,
             "kd_ratio": s_kd
         })
-
-    # Sort squads by most missions or frags? Let's sort by missions desc
-    squads_list.sort(key=lambda x: x["total_missions"], reverse=True)
-
+        
     return {
-        "name": stats["_id"],
-        "total_missions": stats["total_missions"],
-        "total_frags": stats["total_frags"],
-        "total_frags_veh": stats["total_frags_veh"],
-        "total_frags_inf": stats["total_frags_inf"],
-        "total_deaths": total_deaths,
-        "total_destroyed_vehicles": stats["total_destroyed_vehicles"],
+        "name": player_name_or_id, # return input name properly cased? Or fetch real name? 
+                                   # We query lower(), so original casing might be lost if we don't fetch 'name' column.
+                                   # But since we aggregated, we didn't group by name.
+                                   # Let's trust the input or we could do select(PlayerStat.name).limit(1)
+        "total_missions": total_stats.total_missions,
+        "total_frags": t_frags,
+        "total_frags_veh": total_stats.total_frags_veh or 0,
+        "total_frags_inf": total_stats.total_frags_inf or 0,
+        "total_deaths": t_deaths,
+        "total_destroyed_vehicles": total_stats.total_destroyed_vehicles or 0,
         "kd_ratio": kd_ratio,
         "squads": squads_list
     }
 
 @router.get("/top/", response_model=List[PlayerAggregatedStats])
-async def get_top_players(category: str = "general", limit: int = 10):
-    collection = await get_mission_collection()
+async def get_top_players(category: str = "general", limit: int = 10, db: AsyncSession = Depends(get_db)):
     
-    # Initial aggregation
-    pipeline = [
-        {"$unwind": "$players"},
-        {
-            "$group": {
-                "_id": "$players.name",
-                "total_missions": {"$sum": 1},
-                "total_frags": {"$sum": "$players.frags"},
-                "total_frags_veh": {"$sum": "$players.frags_veh"},
-                "total_frags_inf": {"$sum": "$players.frags_inf"},
-                "total_deaths": {"$sum": "$players.death"},
-                "total_destroyed_vehicles": {"$sum": "$players.destroyed_veh"}
-            }
-        },
-        # Filter for minimal activity to avoid plotting 1-kill/0-death outliers
-        {"$match": {"total_missions": {"$gte": 3}}}
-    ]
+    # Define KD expression
+    kd_expr = case(
+        (func.sum(PlayerStat.death) > 0, func.sum(PlayerStat.frags) / func.sum(PlayerStat.death)),
+        else_=func.sum(PlayerStat.frags)
+    ).label("kd_ratio")
+    
+    query = (
+        select(
+            PlayerStat.name,
+            func.count(PlayerStat.mission_id).label("total_missions"),
+            func.sum(PlayerStat.frags).label("total_frags"),
+            func.sum(PlayerStat.frags_veh).label("total_frags_veh"),
+            func.sum(PlayerStat.frags_inf).label("total_frags_inf"),
+            func.sum(PlayerStat.death).label("total_deaths"),
+            func.sum(PlayerStat.destroyed_veh).label("total_destroyed_vehicles"),
+            kd_expr
+        )
+        .group_by(PlayerStat.name)
+        .having(func.count(PlayerStat.mission_id) >= 3)
+    )
     
     if category == "vehicle":
-        # Must have significant vehicle kills to be in vehicle top
-        pipeline.append({"$match": {"total_frags_veh": {"$gte": 5}}})
+        query = query.having(func.sum(PlayerStat.frags_veh) >= 5)
     elif category == "infantry":
-        pipeline.append({"$match": {"total_frags_inf": {"$gte": 5}}})
+        query = query.having(func.sum(PlayerStat.frags_inf) >= 5)
         
-    pipeline.extend([
-        # Compute KD directly in pipeline for sorting
-        {
-            "$addFields": {
-                "kd_ratio": {
-                    "$cond": [
-                        {"$gt": ["$total_deaths", 0]},
-                        {"$divide": ["$total_frags", "$total_deaths"]},
-                        "$total_frags"
-                    ]
-                }
-            }
-        },
-        {"$sort": {"kd_ratio": -1}},
-        {"$limit": limit}
-    ])
+    # Sort by KD descending
+    query = query.order_by(desc("kd_ratio")).limit(limit)
     
-    cursor = collection.aggregate(pipeline)
-    result = await cursor.to_list(length=limit)
+    result = await db.execute(query)
+    rows = result.all()
     
     output = []
-    for r in result:
+    for r in rows:
         output.append({
-            "name": r["_id"],
-            "total_missions": r["total_missions"],
-            "total_frags": r["total_frags"],
-            "total_frags_veh": r["total_frags_veh"],
-            "total_frags_inf": r["total_frags_inf"],
-            "total_deaths": r["total_deaths"],
-            "total_destroyed_vehicles": r["total_destroyed_vehicles"],
-            "kd_ratio": round(r["kd_ratio"], 2),
-            "squads": [] # Omit squads detail for top list
+            "name": r.name,
+            "total_missions": r.total_missions,
+            "total_frags": r.total_frags or 0,
+            "total_frags_veh": r.total_frags_veh or 0,
+            "total_frags_inf": r.total_frags_inf or 0,
+            "total_deaths": r.total_deaths or 0,
+            "total_destroyed_vehicles": r.total_destroyed_vehicles or 0,
+            "kd_ratio": round(r.kd_ratio, 2) if r.kd_ratio else 0.0,
+            "squads": []
         })
         
     return output
