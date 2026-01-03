@@ -29,6 +29,10 @@ ocaps/
 maps/
 data/
 
+r.txt
+verify_import.py
+requirements_fastapi.txt
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
