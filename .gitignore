@@ -29,7 +29,6 @@ ocaps/
 maps/
 data/
 
-r.txt
 verify_import.py
 requirements_fastapi.txt
 
