@@ -1,0 +1,10 @@
+{
+  "name": "Kunduz, Afghanistan",
+  "worldname": "Kunduz",
+  "worldSize": 5120,
+  "imageSize": 16384,
+  "multiplier": 1,
+  "maxZoom": 6,
+  "hasTopo": true,
+  "attribution": "<a href='https://steamcommunity.com/sharedfiles/filedetails/?id=421620913'>James2464, Project Reality, JBAD</a>"
+}

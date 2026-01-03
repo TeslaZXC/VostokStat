@@ -1,0 +1,10 @@
+{
+  "name": "Livonia",
+  "worldName": "enoch",
+  "worldSize": 12800,
+  "imageSize": 16384,
+  "multiplier": 1.28,
+  "maxZoom": 6,
+  "hasTopo": true,
+  "attribution": "Bohemia Interactive"
+}

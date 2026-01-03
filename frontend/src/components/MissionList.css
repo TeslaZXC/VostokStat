@@ -1,0 +1,75 @@
+.mission-list h2 {
+    color: var(--color-text-muted);
+    border-bottom: 2px solid var(--color-border);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+    text-transform: uppercase;
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+}
+
+.mission-grid-header {
+    display: grid;
+    grid-template-columns: 2fr 3fr 2fr 1.5fr 1fr;
+    padding: 0.75rem 1rem;
+    font-weight: bold;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.mission-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.mission-row {
+    display: grid;
+    grid-template-columns: 2fr 3fr 2fr 1.5fr 1fr;
+    padding: 1rem;
+    background: rgba(80, 80, 80, 0.1);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    align-items: center;
+}
+
+.mission-row:hover {
+    background: rgba(143, 155, 107, 0.15);
+    /* Tint of accent color */
+    border-color: var(--color-text-muted);
+    transform: translateX(4px);
+}
+
+.mission-name {
+    font-weight: 500;
+    color: var(--color-text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mission-winner.west {
+    color: #6b8cff;
+}
+
+.mission-winner.east {
+    color: #ff6b6b;
+}
+
+.mission-winner.guer {
+    color: #6bff9e;
+}
+
+.loading,
+.error {
+    text-align: center;
+    padding: 2rem;
+    font-family: monospace;
+    color: var(--color-text-muted);
+}

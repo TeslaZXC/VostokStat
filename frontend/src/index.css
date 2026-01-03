@@ -1,0 +1,55 @@
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  
+  /* Military Theme Palette */
+  --color-bg-dark: #1a1e1b;
+  --color-bg-dark-trans: rgba(26, 30, 27, 0.85);
+  --color-text-main: #e0e0e0;
+  --color-text-muted: #8f9b6b; /* Muted olive */
+  --color-accent: #7c8568; 
+  --color-border: #3c4238;
+  
+  --color-panel-bg: rgba(20, 20, 20, 0.7);
+  --backdrop-blur: 10px;
+
+  color: var(--color-text-main);
+  background-color: var(--color-bg-dark);
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  background-image: url('./assets/bg_military.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg-dark); 
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border); 
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted); 
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Tanoa",
+  "worldName": "tanoa",
+  "worldSize": 15360,
+  "imageSize": 16384,
+  "multiplier": 1.06667,
+  "maxZoom": 6,
+  "hasTopo": true,
+  "attribution": "Bohemia Interactive"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Stratis",
+  "worldName": "stratis",
+  "worldSize": 8192,
+  "imageSize": 16384,
+  "multiplier": 2,
+  "maxZoom": 6,
+  "hasTopo": true,
+  "attribution": "Bohemia Interactive"
+}

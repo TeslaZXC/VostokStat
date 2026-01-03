@@ -1,0 +1,9 @@
+{
+  "name": "SE Angola 1974 v1.30",
+  "worldName": "seangola",
+  "worldSize": 10240,
+  "imageSize": 16384,
+  "multiplier": 1.6,
+  "hasTopo": true,
+  "attribution": "<a href='https://steamcommunity.com/sharedfiles/filedetails/?id=1446500688'>IceBreakr</a>"
+}

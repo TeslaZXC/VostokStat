@@ -1,0 +1,10 @@
+{
+  "name": "Celle",
+  "worldName": "mbg_celle2",
+  "worldSize": 12288,
+  "imageSize": 12288,
+  "multiplier": 1,
+  "hasTopo": true,
+  "maxZoom": 6,
+  "attribution": "Mondkalb/MBG"
+}

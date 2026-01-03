@@ -1,0 +1,10 @@
+{
+	"name": "Niakala",
+	"worldName": "juju_kalahari",
+	"worldSize": 10240,
+	"imageSize": 16384,
+	"multiplier": 1.6,
+	"maxZoom": 6,
+	"hasTopo": true,
+	"attribution": "jujurat"
+}

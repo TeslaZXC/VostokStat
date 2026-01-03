@@ -1,0 +1,10 @@
+{
+  "name": "Fayshkhabur V1.2",
+  "worldName": "BMFayshkhabur",
+  "worldSize": 20480,
+  "imageSize": 20480,
+  "multiplier": 1,
+  "hasTopo": true,
+  "maxZoom": 7,
+  "attribution": "=KCT=Blackmamba"
+}
