@@ -1,2 +1,2 @@
-# ParserRbStat
-ParserRbStat
+# VostokStat
+VostokStat
