@@ -1,9 +1,0 @@
-{
-  "name": "Yellowstone",
-  "worldName": "pabst_yellowstone",
-  "worldSize": 10240,
-  "imageSize": 16384,
-  "multiplier": 1,
-  "hasTopo": true,
-  "attribution": "<a href='https://steamcommunity.com/sharedfiles/filedetails/?id=1412981204'>PabstMirror</a>"
-}

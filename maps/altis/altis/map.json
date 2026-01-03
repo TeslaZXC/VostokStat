@@ -1,9 +1,0 @@
-{
-  "name": "Altis",
-  "worldname": "altis",
-  "worldSize": 30720,
-  "imageSize": 30720,
-  "multiplier": 1,
-  "maxZoom": 7,
-  "hasTopo": true
-}
