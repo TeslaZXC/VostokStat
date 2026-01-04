@@ -7,6 +7,7 @@ import { TopSquads } from './pages/TopSquads';
 import { TopPlayers } from './pages/TopPlayers';
 import { SquadProfile } from './pages/SquadProfile';
 import { PlayerProfile } from './pages/PlayerProfile';
+import TotalStats from './pages/TotalStats';
 import './App.css';
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/total-stats" element={<TotalStats />} />
           <Route path="/missions" element={<MissionsPage />} />
           <Route path="/missions/:id" element={<MissionDetailPage />} />
           <Route path="/squads" element={<TopSquads />} />

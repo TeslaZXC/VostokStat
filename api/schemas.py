@@ -88,8 +88,15 @@ class SquadPlayerStats(BaseModel):
     total_destroyed_vehicles: int
     kd_ratio: float
 
-class SquadDetailedStats(SquadAggregatedStats):
-    players: List[SquadPlayerStats]
+class MissionPerformance(BaseModel):
+    mission_id: int
+    mission_name: str
+    map_name: str
+    date: str
+    duration_time: float
+    frags: int
+    deaths: int
+    kd: float
 
 class PlayerSquadStats(BaseModel):
     squad: str
@@ -111,3 +118,20 @@ class PlayerAggregatedStats(BaseModel):
     total_destroyed_vehicles: int
     kd_ratio: float
     squads: List[PlayerSquadStats] = []
+    missions: List[MissionPerformance] = []
+
+class SideMissionStat(BaseModel):
+    date: str
+    mission_name: str
+    west_frags: int
+    east_frags: int
+
+class TotalSquadsResponse(BaseModel):
+    west: List[SquadAggregatedStats]
+    east: List[SquadAggregatedStats]
+    other: List[SquadAggregatedStats] = []
+    history: List[SideMissionStat] = []
+
+class SquadDetailedStats(SquadAggregatedStats):
+    players: List[SquadPlayerStats]
+    missions: List[MissionPerformance] = []

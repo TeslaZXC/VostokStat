@@ -95,6 +95,8 @@ app.add_middleware(
 app.include_router(missions.router)
 app.include_router(players.router)
 app.include_router(squads.router)
+from api.routers import search
+app.include_router(search.router)
 app.include_router(admin.router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")

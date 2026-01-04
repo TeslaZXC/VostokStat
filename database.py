@@ -107,6 +107,7 @@ class GlobalSquad(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True) # Canonical name
     tags = Column(JSON, default=list) # List of aliases/tags
+    side = Column(String, nullable=True) # Main side (WEST/EAST)
 
     def __str__(self):
         return self.name

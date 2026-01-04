@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { fetchPlayerProfile } from '../api';
-import type { PlayerAggregatedStats } from '../types';
+import type { PlayerAggregatedStats } from '../api';
 import '../components/MissionDetail.css';
 
 export const PlayerProfile: React.FC = () => {
     const { name } = useParams<{ name: string }>();
+    const navigate = useNavigate();
     const [profile, setProfile] = useState<PlayerAggregatedStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -98,6 +99,32 @@ export const PlayerProfile: React.FC = () => {
                         <span>{s.total_frags}</span>
                         <span>{s.total_deaths}</span>
                         <span>{s.kd_ratio.toFixed(2)}</span>
+                    </div>
+                ))}
+            </div>
+
+            <h3>История Миссий</h3>
+            <div className="player-table">
+                <div className="table-header">
+                    <span>Миссия</span>
+                    <span>Карта</span>
+                    <span>Дата</span>
+                    <span>Фраги</span>
+                    <span>Смерти</span>
+                    <span>K/D</span>
+                </div>
+                {profile.missions?.map(m => (
+                    <div
+                        key={m.mission_id}
+                        className="table-row clickable-row"
+                        onClick={() => navigate(`/missions/${m.mission_id}`)}
+                    >
+                        <span>{m.mission_name}</span>
+                        <span>{m.map_name}</span>
+                        <span>{m.date.split(' ')[0]}</span>
+                        <span>{m.frags}</span>
+                        <span>{m.deaths}</span>
+                        <span>{m.kd.toFixed(2)}</span>
                     </div>
                 ))}
             </div>

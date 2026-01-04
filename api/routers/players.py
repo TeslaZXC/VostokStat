@@ -3,7 +3,7 @@ from typing import List, Optional
 from sqlalchemy.future import select
 from sqlalchemy import func, case, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db, PlayerStat
+from database import get_db, PlayerStat, Mission
 from api.schemas import PlayerAggregatedStats
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -34,7 +34,9 @@ async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(ge
             func.sum(PlayerStat.death).label("total_deaths"),
             func.sum(PlayerStat.destroyed_veh).label("total_destroyed_vehicles")
         )
+        .join(Mission, PlayerStat.mission_id == Mission.id)
         .filter(func.lower(PlayerStat.name) == name_lower)
+        .filter(Mission.duration_time >= 100)
     )
     
     result = await db.execute(stmt_total)
@@ -55,7 +57,9 @@ async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(ge
             func.sum(PlayerStat.death).label("total_deaths"),
             func.sum(PlayerStat.destroyed_veh).label("total_destroyed_vehicles")
         )
+        .join(Mission, PlayerStat.mission_id == Mission.id)
         .filter(func.lower(PlayerStat.name) == name_lower)
+        .filter(Mission.duration_time >= 100)
         .group_by(PlayerStat.squad)
         .order_by(desc("total_missions"))
     )
@@ -85,6 +89,44 @@ async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(ge
             "kd_ratio": s_kd
         })
         
+    # 3. Get list of missions played
+    stmt_missions = (
+        select(
+            Mission.id,
+            Mission.mission_name,
+            Mission.map_name,
+            Mission.file_date,
+            Mission.duration_time,
+            PlayerStat.frags,
+            PlayerStat.death
+        )
+        .join(PlayerStat, PlayerStat.mission_id == Mission.id)
+        .filter(func.lower(PlayerStat.name) == name_lower)
+        .filter(Mission.duration_time >= 100)
+        .order_by(desc(Mission.file_date)) # Most recent first
+        # .limit(50) # Optional limit
+    )
+    
+    res_missions = await db.execute(stmt_missions)
+    missions_rows = res_missions.all()
+    
+    missions_list = []
+    for m in missions_rows:
+        fr = m.frags or 0
+        d = m.death or 0
+        kd = round(fr / d, 2) if d > 0 else float(fr)
+        
+        missions_list.append({
+            "mission_id": m.id,
+            "mission_name": m.mission_name,
+            "map_name": m.map_name,
+            "date": m.file_date,
+            "duration_time": m.duration_time,
+            "frags": fr,
+            "deaths": d,
+            "kd": kd
+        })
+
     return {
         "name": player_name_or_id, # return input name properly cased? Or fetch real name? 
                                    # We query lower(), so original casing might be lost if we don't fetch 'name' column.
@@ -97,7 +139,8 @@ async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(ge
         "total_deaths": t_deaths,
         "total_destroyed_vehicles": total_stats.total_destroyed_vehicles or 0,
         "kd_ratio": kd_ratio,
-        "squads": squads_list
+        "squads": squads_list,
+        "missions": missions_list
     }
 
 @router.get("/top/", response_model=List[PlayerAggregatedStats])
@@ -120,6 +163,8 @@ async def get_top_players(category: str = "general", limit: int = 10, db: AsyncS
             func.sum(PlayerStat.destroyed_veh).label("total_destroyed_vehicles"),
             kd_expr
         )
+        .join(Mission, PlayerStat.mission_id == Mission.id)
+        .filter(Mission.duration_time >= 100)
         .group_by(PlayerStat.name)
         .having(func.count(PlayerStat.mission_id) >= 3)
     )

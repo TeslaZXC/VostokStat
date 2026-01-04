@@ -30,6 +30,21 @@ class MissionAdmin(ModelView, model=Mission):
     icon = "fa-solid fa-flag"
     name = "Миссия"
     name_plural = "Миссии"
+    list_template = "mission_list.html"
+
+    @expose("/delete_all", methods=["POST"])
+    async def delete_all(self, request):
+        from sqlalchemy import delete
+        async with self.session_maker() as session:
+            # Delete all missions
+            # Since cascades are set on the models (cascade="all, delete-orphan"), 
+            # we just need to delete all Missions.
+            await session.execute(delete(Mission))
+            await session.commit()
+            
+        url = request.url_for("admin:list", identity=self.identity)
+        from starlette.responses import RedirectResponse
+        return RedirectResponse(url, status_code=303)
 
 class PlayerStatAdmin(ModelView, model=PlayerStat):
     column_list = [
@@ -87,12 +102,13 @@ class MissionSquadStatAdmin(ModelView, model=MissionSquadStat):
         return query.where(MissionSquadStat.squad_tag.in_(subq))
 
 class GlobalSquadAdmin(ModelView, model=GlobalSquad):
-    column_list = [GlobalSquad.id, GlobalSquad.name, GlobalSquad.tags]
+    column_list = [GlobalSquad.id, GlobalSquad.name, GlobalSquad.side, GlobalSquad.tags]
     column_searchable_list = [GlobalSquad.name]
     column_labels = {
         GlobalSquad.id: "ID",
         GlobalSquad.name: "Название",
-        GlobalSquad.tags: "Теги (Алиасы)"
+        GlobalSquad.tags: "Теги (Алиасы)",
+        GlobalSquad.side: "Сторона"
     }
     icon = "fa-solid fa-layer-group"
     name = "Отряд (Global)"

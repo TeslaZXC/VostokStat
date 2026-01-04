@@ -201,9 +201,9 @@ export const MissionDetail: React.FC<MissionDetailProps> = ({ missionId, onBack 
                 <button className="back-btn" onClick={onBack}>&lt; ВЕРНУТЬСЯ К ОПЕРАЦИЯМ</button>
                 <h2>{mission.missionName}</h2>
                 <div className="meta-info">
+                    <span>Дата: {mission.file_date}</span>
                     <span>Карта: {mission.map}</span>
                     <span>Время: {formatDuration(mission.duration_frames)}</span>
-                    <span>Победитель: {mission.win_side}</span>
                 </div>
             </div>
 

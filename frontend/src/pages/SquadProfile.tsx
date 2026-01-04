@@ -4,25 +4,8 @@ import { fetchSquadProfile } from '../api';
 import { formatPlayerName, getCleanName } from '../utils';
 import '../components/MissionDetail.css';
 
-interface SquadMember {
-    name: string;
-    total_missions: number;
-    total_frags: number;
-    total_frags_veh: number;
-    total_frags_inf: number;
-    total_deaths: number;
-    total_destroyed_vehicles: number;
-    kd_ratio: number;
-}
-
-interface SquadStats {
-    squad_name: string;
-    total_missions: number;
-    total_frags: number;
-    total_deaths: number;
-    kd_ratio: number;
-    players: SquadMember[];
-}
+import type { SquadStats } from '../api';
+import '../components/MissionDetail.css';
 
 export const SquadProfile: React.FC = () => {
     const { name } = useParams<{ name: string }>();
@@ -107,6 +90,32 @@ export const SquadProfile: React.FC = () => {
                     <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>&gt;</button>
                 </div>
             )}
+
+            <h3>История Миссий</h3>
+            <div className="player-table">
+                <div className="table-header">
+                    <span>Миссия</span>
+                    <span>Карта</span>
+                    <span>Дата</span>
+                    <span>Фраги</span>
+                    <span>Смерти</span>
+                    <span>K/D</span>
+                </div>
+                {stats.missions?.map(m => (
+                    <div
+                        key={m.mission_id}
+                        className="table-row clickable-row"
+                        onClick={() => navigate(`/missions/${m.mission_id}`)}
+                    >
+                        <span>{m.mission_name}</span>
+                        <span>{m.map_name}</span>
+                        <span>{m.date.split(' ')[0]}</span>
+                        <span>{m.frags}</span>
+                        <span>{m.deaths}</span>
+                        <span>{m.kd.toFixed(2)}</span>
+                    </div>
+                ))}
+            </div>
 
             <style>{`
                 .profile-stats-grid {

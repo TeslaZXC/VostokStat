@@ -39,7 +39,6 @@ export const MissionList: React.FC<MissionListProps> = ({ onSelectMission }) => 
                 <span>Дата</span>
                 <span>Миссия</span>
                 <span>Карта</span>
-                <span>Победитель</span>
                 <span>Длит.</span>
             </div>
             <div className="mission-grid">
@@ -48,7 +47,6 @@ export const MissionList: React.FC<MissionListProps> = ({ onSelectMission }) => 
                         <span className="mission-date">{m.file_date}</span>
                         <span className="mission-name" title={m.missionName}>{m.missionName}</span>
                         <span className="mission-map">{m.map}</span>
-                        <span className={`mission-winner ${m.win_side?.toLowerCase()}`}>{m.win_side || 'Ничья'}</span>
                         <span className="mission-duration">{formatDuration(m.duration_frames)}</span>
                     </div>
                 ))}

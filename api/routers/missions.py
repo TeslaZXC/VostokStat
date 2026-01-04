@@ -14,6 +14,7 @@ router = APIRouter(prefix="/missions", tags=["missions"])
 async def get_missions(limit: int = 20, skip: int = 0, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Mission)
+        .filter(Mission.duration_time >= 100)
         .order_by(Mission.id.desc())
         .offset(skip)
         .limit(limit)
