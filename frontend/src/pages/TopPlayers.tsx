@@ -5,8 +5,11 @@ import type { PlayerAggregatedStats } from '../types';
 import { formatPlayerName, getCleanName } from '../utils';
 import '../components/MissionDetail.css';
 
+import { useRotation } from '../context/RotationContext';
+
 export const TopPlayers: React.FC = () => {
     const navigate = useNavigate();
+    const { currentRotationId } = useRotation();
     const [players, setPlayers] = useState<PlayerAggregatedStats[]>([]);
     const [category, setCategory] = useState('general');
     const [loading, setLoading] = useState(true);
@@ -15,7 +18,7 @@ export const TopPlayers: React.FC = () => {
         const loadData = async () => {
             setLoading(true);
             try {
-                const data = await fetchTopPlayers(category);
+                const data = await fetchTopPlayers(category, currentRotationId);
                 setPlayers(data);
             } catch (e) {
                 console.error(e);
@@ -24,7 +27,7 @@ export const TopPlayers: React.FC = () => {
             }
         };
         loadData();
-    }, [category]);
+    }, [category, currentRotationId]);
 
     return (
         <div className="mission-detail">

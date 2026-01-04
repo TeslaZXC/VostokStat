@@ -41,6 +41,7 @@ export const AdminLayout: React.FC = () => {
                     <Link to="/admin/players" className={`admin-nav-link ${isActive("/admin/players") ? 'active' : ''}`}>Игроки</Link>
                     <Link to="/admin/config" className={`admin-nav-link ${isActive("/admin/config") ? 'active' : ''}`}>Конфиг</Link>
                     <Link to="/admin/tools" className={`admin-nav-link ${isActive("/admin/tools") ? 'active' : ''}`}>Инструменты</Link>
+                    <Link to="/admin/rotations" className={`admin-nav-link ${isActive("/admin/rotations") ? 'active' : ''}`}>Ротации (Seasons)</Link>
                     <Link to="/admin/users" className={`admin-nav-link ${isActive("/admin/users") ? 'active' : ''}`}>Админы</Link>
                 </nav>
 

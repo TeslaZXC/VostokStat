@@ -1,13 +1,33 @@
 from fastapi import APIRouter, HTTPException, Depends
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Optional
 from sqlalchemy.future import select
-from sqlalchemy import func, case, desc
+from sqlalchemy import func, case, desc, and_
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db, MissionSquadStat, GlobalSquad, PlayerStat, Mission
+from database import get_db, MissionSquadStat, GlobalSquad, PlayerStat, Mission, Rotation, RotationSquad
 from api.schemas import SquadAggregatedStats, SquadDetailedStats, TotalSquadsResponse
 import logging
 
 router = APIRouter(prefix="/squads", tags=["squads"])
+
+async def get_rotation_context(db: AsyncSession, rotation_id: Optional[int]):
+    if not rotation_id:
+        return None, None, None
+        
+    stmt = select(Rotation).filter(Rotation.id == rotation_id).options(selectinload(Rotation.squads).selectinload(RotationSquad.squad))
+    res = await db.execute(stmt)
+    rot = res.scalars().first()
+    
+    if not rot:
+        return None, None, None
+        
+    # Whitelist of canonical names
+    whitelist_names = set()
+    for rs in rot.squads:
+        if rs.squad:
+            whitelist_names.add(rs.squad.name)
+            
+    return rot.start_date.replace('-', '_'), rot.end_date.replace('-', '_'), whitelist_names
 
 async def get_squad_mappings(db: AsyncSession):
     """
@@ -46,7 +66,10 @@ async def get_squad_mappings(db: AsyncSession):
 
 
 @router.get("/total_stats", response_model=TotalSquadsResponse)
-async def get_total_squad_stats(db: AsyncSession = Depends(get_db)):
+async def get_total_squad_stats(rotation_id: Optional[int] = None, db: AsyncSession = Depends(get_db)):
+    # 0. Rotation Context
+    start_date, end_date, whitelist_names = await get_rotation_context(db, rotation_id)
+
     # 1. Get Mappings
     tag_to_canonical, canonical_meta, _ = await get_squad_mappings(db)
     
@@ -61,8 +84,15 @@ async def get_total_squad_stats(db: AsyncSession = Depends(get_db)):
         )
         .join(Mission, MissionSquadStat.mission_id == Mission.id)
         .where(Mission.duration_time >= 100)
-        .group_by(MissionSquadStat.squad_tag)
     )
+    
+    # Date Filter
+    if start_date and end_date:
+        # Date format: YYYY-MM-DD. Mission.file_date is "YYYY-MM-DD HH:MM:SS" ??
+        # Or usually YYYY-MM-DD format based on schema. Assuming string comparison works for ISO dates.
+        stmt = stmt.where(and_(Mission.file_date >= start_date, Mission.file_date <= end_date + " 23:59:59"))
+
+    stmt = stmt.group_by(MissionSquadStat.squad_tag)
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -75,15 +105,26 @@ async def get_total_squad_stats(db: AsyncSession = Depends(get_db)):
         if not raw_tag:
             continue
             
-        lower_tag = raw_tag.strip().lower() # Strip here too just in case
+        lower_tag = raw_tag.strip().lower() 
         
         # Decide canonical name
+        canon_name = None
+        side = r.side # Default to stats side
+        
         if lower_tag in tag_to_canonical:
             canon_name = tag_to_canonical[lower_tag]
-            side = canonical_meta[canon_name]["side"]
+            # Override side if mapped
+            if canonical_meta[canon_name]["side"]:
+                side = canonical_meta[canon_name]["side"]
         else:
-            # Strictly exclude unmapped squads as per user request
+            # Skip unmapped if we want strict mode?
+            # User wants Side Stats -> usually mapped only.
             continue
+            
+        # Whitelist Filter
+        if whitelist_names is not None:
+            if canon_name not in whitelist_names:
+                continue
 
         if canon_name not in aggregated:
             aggregated[canon_name] = {
@@ -99,9 +140,9 @@ async def get_total_squad_stats(db: AsyncSession = Depends(get_db)):
         agg["total_frags"] += (r.total_frags or 0)
         agg["total_deaths"] += (r.total_deaths or 0)
         
-        # Prefer side from GlobalSquad if available, else keep first seen
-        if lower_tag in tag_to_canonical and canonical_meta[tag_to_canonical[lower_tag]]["side"]:
-             agg["side"] = canonical_meta[tag_to_canonical[lower_tag]]["side"]
+        # Update side if still valid
+        if side and canonical_meta[canon_name]["side"]:
+            agg["side"] = canonical_meta[canon_name]["side"]
 
 
     # 4. Filter and Format
@@ -146,8 +187,13 @@ async def get_total_squad_stats(db: AsyncSession = Depends(get_db)):
         )
         .join(Mission, MissionSquadStat.mission_id == Mission.id)
         .where(Mission.duration_time >= 100)
-        .order_by(Mission.file_date)
     )
+    
+    if start_date and end_date:
+        stmt_hist = stmt_hist.where(and_(Mission.file_date >= start_date, Mission.file_date <= end_date + " 23:59:59"))
+        
+    stmt_hist = stmt_hist.order_by(Mission.file_date)
+
     hist_res = await db.execute(stmt_hist)
     hist_rows = hist_res.all()
     
@@ -155,6 +201,19 @@ async def get_total_squad_stats(db: AsyncSession = Depends(get_db)):
     
     for date, m_name, tag, frags in hist_rows:
         if not tag: continue
+
+        lower_tag = tag.strip().lower()
+        if lower_tag not in tag_to_canonical:
+            continue
+            
+        canon_name = tag_to_canonical[lower_tag]
+        
+        if whitelist_names is not None and canon_name not in whitelist_names:
+            continue
+            
+        side = canonical_meta[canon_name]["side"]
+        
+        # Key
         key = f"{date}_{m_name}"
         if key not in history_map:
             history_map[key] = {
@@ -164,12 +223,6 @@ async def get_total_squad_stats(db: AsyncSession = Depends(get_db)):
                 "east_frags": 0
             }
         
-        lower_tag = tag.strip().lower()
-        side = None
-        if lower_tag in tag_to_canonical:
-            c_name = tag_to_canonical[lower_tag]
-            side = canonical_meta[c_name]["side"]
-        
         if side == "WEST":
             history_map[key]["west_frags"] += (frags or 0)
         elif side == "EAST":
@@ -178,7 +231,10 @@ async def get_total_squad_stats(db: AsyncSession = Depends(get_db)):
     return {"west": west, "east": east, "other": other, "history": list(history_map.values())}
 
 @router.get("/top", response_model=List[SquadAggregatedStats])
-async def get_top_squads(db: AsyncSession = Depends(get_db)):
+async def get_top_squads(rotation_id: Optional[int] = None, db: AsyncSession = Depends(get_db)):
+    # Rotation Context
+    start_date, end_date, whitelist_names = await get_rotation_context(db, rotation_id)
+
     # 1. Get whitelist (Only configured squads)
     tag_to_canonical, canonical_meta, _ = await get_squad_mappings(db)
     
@@ -195,12 +251,17 @@ async def get_top_squads(db: AsyncSession = Depends(get_db)):
         )
         .join(Mission, MissionSquadStat.mission_id == Mission.id)
         .where(Mission.duration_time >= 100)
-        .group_by(MissionSquadStat.squad_tag)
     )
+    
+    if start_date and end_date:
+        stmt = stmt.where(and_(Mission.file_date >= start_date, Mission.file_date <= end_date + " 23:59:59"))
+        
+    stmt = stmt.group_by(MissionSquadStat.squad_tag)
+
     result = await db.execute(stmt)
     rows = result.all()
     
-    # 3. Aggregate only for Whitelisted
+    # 3. Aggregate only for Whitelisted (and filtered)
     aggregated = {} # canon_name -> stats
     
     for r in rows:
@@ -210,6 +271,9 @@ async def get_top_squads(db: AsyncSession = Depends(get_db)):
         lower_tag = raw_tag.strip().lower()
         if lower_tag in tag_to_canonical:
             c_name = tag_to_canonical[lower_tag]
+            
+            if whitelist_names is not None and c_name not in whitelist_names:
+                continue
             
             if c_name not in aggregated:
                 aggregated[c_name] = {
@@ -237,7 +301,10 @@ async def get_top_squads(db: AsyncSession = Depends(get_db)):
     return output[:50]
 
 @router.get("/{squad_name}", response_model=SquadDetailedStats)
-async def get_squad_stats(squad_name: str, db: AsyncSession = Depends(get_db)):
+async def get_squad_stats(squad_name: str, rotation_id: Optional[int] = None, db: AsyncSession = Depends(get_db)):
+    # Rotation Context
+    start_date, end_date, whitelist_names = await get_rotation_context(db, rotation_id)
+
     tag_to_canonical, canonical_meta, canonical_to_tags = await get_squad_mappings(db)
     
     squad_lower = squad_name.strip().lower()
@@ -262,6 +329,19 @@ async def get_squad_stats(squad_name: str, db: AsyncSession = Depends(get_db)):
          # Unknown squad: assume specific tag requested
          target_canonical = squad_name # Keep original casing as best guess
          target_tags = [squad_lower]
+
+    # Whitelist Check: If rotation exists and this squad is not in it, return 404 or empty?
+    # Returning empty allows viewing profile but with 0 stats, which is informative.
+    if whitelist_names is not None and target_canonical not in whitelist_names:
+         return {
+            "squad_name": target_canonical,
+            "total_missions": 0,
+            "total_frags": 0,
+            "total_deaths": 0,
+            "kd_ratio": 0.0,
+            "players": [],
+            "missions": []
+        }
 
     # --- 2. Build Search Terms for DB ---
     # Since SQLite lower() breaks on Cyrillic, we must exact match the possible stored values.
@@ -295,9 +375,12 @@ async def get_squad_stats(squad_name: str, db: AsyncSession = Depends(get_db)):
         .join(Mission, PlayerStat.mission_id == Mission.id)
         .filter(PlayerStat.squad.in_(search_terms)) # Exact match filter
         .filter(Mission.duration_time >= 100)
-        .group_by(PlayerStat.name)
-        .order_by(desc("total_missions"))
     )
+
+    if start_date and end_date:
+        stmt_players = stmt_players.filter(and_(Mission.file_date >= start_date, Mission.file_date <= end_date + " 23:59:59"))
+
+    stmt_players = stmt_players.group_by(PlayerStat.name).order_by(desc("total_missions"))
     
     res_players = await db.execute(stmt_players)
     players_rows = res_players.all()
@@ -316,8 +399,12 @@ async def get_squad_stats(squad_name: str, db: AsyncSession = Depends(get_db)):
         .join(Mission, MissionSquadStat.mission_id == Mission.id)
         .filter(MissionSquadStat.squad_tag.in_(search_terms)) # Exact match filter
         .filter(Mission.duration_time >= 100)
-        .order_by(desc(Mission.file_date))
     )
+
+    if start_date and end_date:
+        stmt_meta_missions = stmt_meta_missions.filter(and_(Mission.file_date >= start_date, Mission.file_date <= end_date + " 23:59:59"))
+
+    stmt_meta_missions = stmt_meta_missions.order_by(desc(Mission.file_date))
     
     res_missions = await db.execute(stmt_meta_missions)
     missions_rows = res_missions.all()

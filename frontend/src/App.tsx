@@ -16,37 +16,44 @@ import AdminConfig from './pages/AdminConfig';
 import AdminUsers from './pages/AdminUsers';
 import AdminTools from './pages/AdminTools';
 import AdminMissionSquadStats from './pages/AdminMissionSquadStats';
+import AdminRotations from './pages/AdminRotations';
 import { AdminLayout } from './pages/AdminLayout';
 import './App.css';
 
+import { RotationProvider } from './context/RotationContext';
+
 function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Main Site Routes - Wrapped in Layout */}
-        <Route path="/" element={<Layout><Home /></Layout>} />
-        <Route path="/total-stats" element={<Layout><TotalStats /></Layout>} />
-        <Route path="/missions" element={<Layout><MissionsPage /></Layout>} />
-        <Route path="/missions/:id" element={<Layout><MissionDetailPage /></Layout>} />
-        <Route path="/squads" element={<Layout><TopSquads /></Layout>} />
-        <Route path="/squads/:name" element={<Layout><SquadProfile /></Layout>} />
-        <Route path="/players" element={<Layout><TopPlayers /></Layout>} />
-        <Route path="/players/:name" element={<Layout><PlayerProfile /></Layout>} />
+    <RotationProvider>
+      <Router>
+        <Routes>
+          {/* Main Site Routes - Wrapped in Layout */}
+          <Route path="/" element={<Layout><Home /></Layout>} />
+          <Route path="/total-stats" element={<Layout><TotalStats /></Layout>} />
+          <Route path="/missions" element={<Layout><MissionsPage /></Layout>} />
+          <Route path="/missions/:id" element={<Layout><MissionDetailPage /></Layout>} />
+          <Route path="/squads" element={<Layout><TopSquads /></Layout>} />
+          <Route path="/squads/:name" element={<Layout><SquadProfile /></Layout>} />
+          <Route path="/players" element={<Layout><TopPlayers /></Layout>} />
+          <Route path="/players/:name" element={<Layout><PlayerProfile /></Layout>} />
 
-        {/* Admin Routes - Isolated from Main Layout */}
-        <Route path="/admin/login" element={<AdminLogin />} />
+          {/* Admin Routes - Isolated from Main Layout */}
+          <Route path="/admin/login" element={<AdminLogin />} />
 
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminDashboard />} /> {/* Squads */}
-          <Route path="missions" element={<AdminMissions />} />
-          <Route path="mission-squad-stats" element={<AdminMissionSquadStats />} />
-          <Route path="players" element={<AdminPlayers />} />
-          <Route path="config" element={<AdminConfig />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="tools" element={<AdminTools />} />
-        </Route>
-      </Routes>
-    </Router>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} /> {/* Squads */}
+            <Route path="missions" element={<AdminMissions />} />
+            <Route path="mission-squad-stats" element={<AdminMissionSquadStats />} />
+            <Route path="players" element={<AdminPlayers />} />
+            <Route path="config" element={<AdminConfig />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="tools" element={<AdminTools />} />
+            <Route path="rotations" element={<AdminRotations />} />
+          </Route>
+        </Routes>
+      </Router>
+    </RotationProvider>
   );
 }
 

@@ -297,6 +297,7 @@ async def get_squads(
     output = []
     for s in squads:
         output.append({
+            "id": s.id,
             "name": s.name,
             "tags": s.tags if s.tags else []
         })

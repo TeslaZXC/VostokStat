@@ -3,6 +3,7 @@ import { fetchMissions } from '../api';
 import type { MissionSummary } from '../types';
 import './MissionList.css';
 import { formatDuration } from '../utils';
+import { useRotation } from '../context/RotationContext';
 
 interface MissionListProps {
     onSelectMission: (id: number) => void;
@@ -12,15 +13,16 @@ export const MissionList: React.FC<MissionListProps> = ({ onSelectMission }) => 
     const [missions, setMissions] = useState<MissionSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { currentRotationId } = useRotation();
 
     useEffect(() => {
         loadMissions();
-    }, []);
+    }, [currentRotationId]);
 
     const loadMissions = async () => {
         try {
             setLoading(true);
-            const data = await fetchMissions();
+            const data = await fetchMissions(20, 0, currentRotationId);
             setMissions(data);
         } catch {
             setError('Не удалось загрузить данные');

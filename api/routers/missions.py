@@ -1,21 +1,44 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
+from typing import List, Optional
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy import and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db, Mission, GlobalSquad, MissionSquadStat, PlayerStat
+from database import get_db, Mission, GlobalSquad, MissionSquadStat, PlayerStat, Rotation, RotationSquad
 from api.schemas import MissionSummary, MissionDetail
+
 # We need to adapt schemas or Models to schemas. 
 # Pydantic models expect dictionary or object with attributes. ORM objects work fine with from_attributes (orm_mode).
 
 router = APIRouter(prefix="/missions", tags=["missions"])
 
+async def get_rotation_context(db: AsyncSession, rotation_id: Optional[int]):
+    if not rotation_id:
+        return None, None
+        
+    stmt = select(Rotation).filter(Rotation.id == rotation_id)
+    res = await db.execute(stmt)
+    rot = res.scalars().first()
+    
+    if not rot:
+        return None, None
+            
+    return rot.start_date.replace('-', '_'), rot.end_date.replace('-', '_')
+
 @router.get("/", response_model=List[MissionSummary])
-async def get_missions(limit: int = 20, skip: int = 0, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
+async def get_missions(limit: int = 20, skip: int = 0, rotation_id: Optional[int] = None, db: AsyncSession = Depends(get_db)):
+    start_date, end_date = await get_rotation_context(db, rotation_id)
+    
+    stmt = (
         select(Mission)
         .filter(Mission.duration_time >= 100)
-        .order_by(Mission.id.desc())
+    )
+    
+    if start_date and end_date:
+        stmt = stmt.filter(and_(Mission.file_date >= start_date, Mission.file_date <= end_date + " 23:59:59"))
+    
+    result = await db.execute(
+        stmt.order_by(Mission.id.desc())
         .offset(skip)
         .limit(limit)
     )

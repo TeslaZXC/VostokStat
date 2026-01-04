@@ -4,17 +4,21 @@ import { fetchTopSquads } from '../api';
 import type { SquadAggregatedStats } from '../types';
 import '../components/MissionDetail.css';
 
+import { useRotation } from '../context/RotationContext';
+
 export const TopSquads: React.FC = () => {
+    const { currentRotationId } = useRotation();
     const [squads, setSquads] = useState<SquadAggregatedStats[]>([]);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
     useEffect(() => {
-        fetchTopSquads()
+        setLoading(true);
+        fetchTopSquads(currentRotationId)
             .then(setSquads)
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, []);
+    }, [currentRotationId]);
 
     if (loading) return <div className="loading">Анализ эффективности отрядов...</div>;
 

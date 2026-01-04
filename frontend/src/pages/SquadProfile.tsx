@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useRotation } from '../context/RotationContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchSquadProfile } from '../api';
 import { formatPlayerName, getCleanName } from '../utils';
@@ -10,6 +11,7 @@ import '../components/MissionDetail.css';
 export const SquadProfile: React.FC = () => {
     const { name } = useParams<{ name: string }>();
     const navigate = useNavigate();
+    const { currentRotationId } = useRotation();
     const [stats, setStats] = useState<SquadStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -17,11 +19,11 @@ export const SquadProfile: React.FC = () => {
 
     useEffect(() => {
         if (!name) return;
-        fetchSquadProfile(name)
+        fetchSquadProfile(name, currentRotationId)
             .then(setStats)
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [name]);
+    }, [name, currentRotationId]);
 
     if (loading) return <div className="loading">Получение данных отряда...</div>;
     if (!stats) return <div className="error">Отряд не найден</div>;

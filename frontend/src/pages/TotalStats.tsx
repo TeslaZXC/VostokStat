@@ -7,7 +7,10 @@ import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 
+import { useRotation } from '../context/RotationContext';
+
 const TotalStats: React.FC = () => {
+    const { currentRotationId } = useRotation();
     const [data, setData] = useState<TotalSquadsResponse | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -15,8 +18,9 @@ const TotalStats: React.FC = () => {
 
     useEffect(() => {
         const loadData = async () => {
+            setLoading(true);
             try {
-                const result = await fetchTotalSquadStats();
+                const result = await fetchTotalSquadStats(currentRotationId);
                 setData(result);
             } catch (err) {
                 setError('Не удалось загрузить данные.');
@@ -25,7 +29,7 @@ const TotalStats: React.FC = () => {
             }
         };
         loadData();
-    }, []);
+    }, [currentRotationId]);
 
     if (loading) return <div className="loading">Загрузка...</div>;
     if (error) return <div className="error">{error}</div>;

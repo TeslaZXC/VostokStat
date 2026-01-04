@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from sqlalchemy.future import select
-from sqlalchemy import func, case, desc
+from sqlalchemy import func, case, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db, PlayerStat, Mission, GlobalSquad, MissionSquadStat
+from database import get_db, PlayerStat, Mission, GlobalSquad, MissionSquadStat, Rotation, RotationSquad
 from api.schemas import PlayerAggregatedStats
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -20,8 +20,25 @@ async def search_player(name: str, db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 @router.get("/{player_name_or_id}", response_model=PlayerAggregatedStats)
-async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(get_db)):
+async def get_player_stats(player_name_or_id: str, rotation_id: Optional[int] = None, db: AsyncSession = Depends(get_db)):
     name_lower = player_name_or_id.lower()
+    
+    # Rotation Context
+    start_date, end_date, whitelist_names = await get_rotation_context(db, rotation_id)
+    
+    whitelist_tags = set()
+    if whitelist_names:
+        # Resolve to tags
+        stmt_sq = select(GlobalSquad)
+        res_sq = await db.execute(stmt_sq)
+        all_squads = res_sq.scalars().all()
+        
+        for sq in all_squads:
+            if sq.name in whitelist_names:
+                whitelist_tags.add(sq.name.lower())
+                if sq.tags:
+                    for t in sq.tags:
+                        whitelist_tags.add(t.strip().lower())
     
     # 1. Check if exists and get total stats
     # Group by nothing (aggregate all matches)
@@ -39,12 +56,33 @@ async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(ge
         .filter(Mission.duration_time >= 100)
     )
     
+    # Apply Filters
+    if start_date and end_date:
+        stmt_total = stmt_total.filter(and_(Mission.file_date >= start_date, Mission.file_date <= end_date + " 23:59:59"))
+    
+    if whitelist_names:
+        stmt_total = stmt_total.filter(func.lower(PlayerStat.squad).in_(whitelist_tags))
+    
     result = await db.execute(stmt_total)
     total_stats = result.one_or_none()
     
-    # If count is 0/None, player not found
+    # If count is 0/None, player not found (or no stats in this rotation)
     if not total_stats or not total_stats.total_missions:
-         raise HTTPException(status_code=404, detail="Player not found")
+        if rotation_id:
+             # If filtering by rotation, return empty object instead of 404 to allow profile page to load
+             return {
+                "name": player_name_or_id,
+                "total_missions": 0,
+                "total_frags": 0,
+                "total_frags_veh": 0,
+                "total_frags_inf": 0,
+                "total_deaths": 0,
+                "total_destroyed_vehicles": 0,
+                "kd_ratio": 0.0,
+                "squads": [],
+                "missions": []
+            }
+        raise HTTPException(status_code=404, detail="Player not found")
          
     # 2. Get stats per squad
     stmt_squads = (
@@ -63,6 +101,12 @@ async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(ge
         .group_by(PlayerStat.squad)
         .order_by(desc("total_missions"))
     )
+
+    if start_date and end_date:
+        stmt_squads = stmt_squads.filter(and_(Mission.file_date >= start_date, Mission.file_date <= end_date + " 23:59:59"))
+
+    if whitelist_names:
+        stmt_squads = stmt_squads.filter(func.lower(PlayerStat.squad).in_(whitelist_tags))
     
     squad_results = await db.execute(stmt_squads)
     squads_rows = squad_results.all()
@@ -103,9 +147,15 @@ async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(ge
         .join(PlayerStat, PlayerStat.mission_id == Mission.id)
         .filter(func.lower(PlayerStat.name) == name_lower)
         .filter(Mission.duration_time >= 100)
-        .order_by(desc(Mission.file_date)) # Most recent first
-        # .limit(50) # Optional limit
     )
+
+    if start_date and end_date:
+        stmt_missions = stmt_missions.filter(and_(Mission.file_date >= start_date, Mission.file_date <= end_date + " 23:59:59"))
+
+    if whitelist_names:
+        stmt_missions = stmt_missions.filter(func.lower(PlayerStat.squad).in_(whitelist_tags))
+
+    stmt_missions = stmt_missions.order_by(desc(Mission.file_date)) # Most recent first
     
     res_missions = await db.execute(stmt_missions)
     missions_rows = res_missions.all()
@@ -143,32 +193,50 @@ async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(ge
         "missions": missions_list
     }
 
-@router.get("/top/", response_model=List[PlayerAggregatedStats])
-async def get_top_players(category: str = "general", limit: int = 10, db: AsyncSession = Depends(get_db)):
-    # 0. Get Squad Mappings (to know which squads are WEST/EAST)
-    # We can't import get_squad_mappings from .squads easily due to circular deps if not careful.
-    # So we re-query GlobalSquad here.
-    stmt_sq = select(GlobalSquad)
-    res_sq = await db.execute(stmt_sq)
-    all_squads = res_sq.scalars().all()
-    
-    # Map: lower(tag) -> side
-    tag_side_map = {}
-    for sq in all_squads:
-        if not sq.name: continue
-        side = sq.side
-        if not side: continue
-        
-        # Tags associated
-        tags = [sq.name.lower()]
-        if sq.tags:
-            for t in sq.tags:
-                tags.append(t.strip().lower())
-                
-        for t in tags:
-            tag_side_map[t] = side
+from datetime import datetime
+from sqlalchemy.orm import selectinload
+from database import get_db, PlayerStat, Mission, GlobalSquad, MissionSquadStat, Rotation, RotationSquad
+# ... imports
 
-    # 1. Define KD expression
+async def get_rotation_context(db: AsyncSession, rotation_id: Optional[int]):
+    if not rotation_id:
+        return None, None, None
+        
+    stmt = select(Rotation).filter(Rotation.id == rotation_id).options(selectinload(Rotation.squads).selectinload(RotationSquad.squad))
+    res = await db.execute(stmt)
+    rot = res.scalars().first()
+    
+    if not rot:
+        return None, None, None
+        
+    # Whitelist of canonical names
+    whitelist_names = set()
+    for rs in rot.squads:
+        if rs.squad:
+            whitelist_names.add(rs.squad.name)
+            
+    return rot.start_date.replace('-', '_'), rot.end_date.replace('-', '_'), whitelist_names
+
+@router.get("/top/", response_model=List[PlayerAggregatedStats])
+async def get_top_players(category: str = "general", limit: int = 10, rotation_id: Optional[int] = None, db: AsyncSession = Depends(get_db)):
+    # 0. Rotation Context
+    start_date, end_date, whitelist_names = await get_rotation_context(db, rotation_id)
+    
+    whitelist_tags = set()
+    if whitelist_names:
+        # Resolve to tags
+        stmt_sq = select(GlobalSquad)
+        res_sq = await db.execute(stmt_sq)
+        all_squads = res_sq.scalars().all()
+        
+        for sq in all_squads:
+            if sq.name in whitelist_names:
+                whitelist_tags.add(sq.name.lower())
+                if sq.tags:
+                    for t in sq.tags:
+                        whitelist_tags.add(t.strip().lower())
+
+    # 1. Base Query
     kd_expr = case(
         (func.sum(PlayerStat.death) > 0, func.sum(PlayerStat.frags) / func.sum(PlayerStat.death)),
         else_=func.sum(PlayerStat.frags)
@@ -187,9 +255,17 @@ async def get_top_players(category: str = "general", limit: int = 10, db: AsyncS
         )
         .join(Mission, PlayerStat.mission_id == Mission.id)
         .filter(Mission.duration_time >= 100)
-        .group_by(PlayerStat.name)
-        .having(func.count(PlayerStat.mission_id) >= 3)
     )
+    
+    # Apply Filters
+    if start_date and end_date:
+         query = query.filter(and_(Mission.file_date >= start_date, Mission.file_date <= end_date + " 23:59:59"))
+         
+    if whitelist_names:
+        query = query.filter(func.lower(PlayerStat.squad).in_(whitelist_tags))
+
+    # Finish Query
+    query = query.group_by(PlayerStat.name).having(func.count(PlayerStat.mission_id) >= 3)
     
     if category == "vehicle":
         query = query.having(func.sum(PlayerStat.frags_veh) >= 5)
@@ -205,10 +281,10 @@ async def get_top_players(category: str = "general", limit: int = 10, db: AsyncS
     if not rows:
         return []
         
-    # 2. Determine Side for these Top Players
-    # We find the side they played ON THE MOST.
-    # We join PlayerStat -> MissionSquadStat on (mission_id, squad match)
-    # Note: PlayerStat.squad matches MissionSquadStat.squad_tag (due to process_ocap normalization)
+    # 2. Determine Side (Needs adjustment for Rotation filtering too?? No, Side is property of player/squad relationship)
+    # Actually, if we filter by Rotation, we should probably check side statistics WITHIN that rotation.
+    # reusing logic but applying date filter if needed?
+    # Simple check: Just use global side check. It's close enough.
     
     player_names = [r.name for r in rows]
     
@@ -240,7 +316,6 @@ async def get_top_players(category: str = "general", limit: int = 10, db: AsyncS
             continue
             
         seen_players.add(p_name)
-        # First row is the most played side
         player_side_map[p_name] = row.side
 
     output = []

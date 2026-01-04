@@ -136,3 +136,23 @@ class TotalSquadsResponse(BaseModel):
 class SquadDetailedStats(SquadAggregatedStats):
     players: List[SquadPlayerStats]
     missions: List[MissionPerformance] = []
+
+class RotationBase(BaseModel):
+    name: str # e.g. "Season 1"
+    start_date: str # YYYY-MM-DD
+    end_date: str # YYYY-MM-DD
+    is_active: bool = False
+
+class RotationCreate(RotationBase):
+    squad_ids: List[int] = [] # IDs of GlobalSquads to include
+
+class RotationUpdate(RotationBase):
+    squad_ids: Optional[List[int]] = None
+
+class Rotation(RotationBase):
+    id: int
+    squad_count: int = 0
+    squad_ids: List[int] = [] 
+
+    class Config:
+        from_attributes = True

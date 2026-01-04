@@ -131,6 +131,31 @@ class AppConfig(Base):
     def __str__(self):
         return f"{self.key}: {self.value}"
 
+class Rotation(Base):
+    __tablename__ = "rotations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    start_date = Column(String) # Stored as YYYY-MM-DD
+    end_date = Column(String)   # Stored as YYYY-MM-DD
+    is_active = Column(Integer, default=0) # Boolean 0/1
+
+    # Relationship to squads
+    squads = relationship("RotationSquad", back_populates="rotation", cascade="all, delete-orphan")
+
+    def __str__(self):
+        return f"{self.name} ({self.start_date} - {self.end_date})"
+
+class RotationSquad(Base):
+    __tablename__ = "rotation_squads"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    rotation_id = Column(Integer, ForeignKey("rotations.id"))
+    squad_id = Column(Integer, ForeignKey("squads.id"))
+    
+    rotation = relationship("Rotation", back_populates="squads")
+    squad = relationship("GlobalSquad")
+
 # --- Dependencies ---
 
 def get_app_config_sync(key: str, default: str) -> str:

@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { fetchPlayerProfile } from '../api';
+import { useRotation } from '../context/RotationContext';
 import type { PlayerAggregatedStats } from '../api';
 import '../components/MissionDetail.css';
 
 export const PlayerProfile: React.FC = () => {
     const { name } = useParams<{ name: string }>();
     const navigate = useNavigate();
+    const { currentRotationId } = useRotation();
     const [profile, setProfile] = useState<PlayerAggregatedStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -18,7 +20,7 @@ export const PlayerProfile: React.FC = () => {
             setLoading(true);
             setError(null);
             try {
-                const data = await fetchPlayerProfile(name);
+                const data = await fetchPlayerProfile(name, currentRotationId);
                 setProfile(data);
             } catch {
                 setError('Operative not found or KIA.');
@@ -28,7 +30,7 @@ export const PlayerProfile: React.FC = () => {
         };
 
         fetchData();
-    }, [name]);
+    }, [name, currentRotationId]);
 
     if (loading) return <div className="loading">Загрузка досье...</div>;
     if (error) return <div className="error">{error}</div>;

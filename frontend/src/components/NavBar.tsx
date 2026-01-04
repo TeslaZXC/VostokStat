@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { searchGeneral } from '../api';
 import type { SearchResult } from '../api';
+import { useRotation } from '../context/RotationContext';
 import './NavBar.css';
 
 export const NavBar: React.FC = () => {
     const navigate = useNavigate();
+    const { rotations, currentRotationId, setRotation } = useRotation();
     const [query, setQuery] = useState('');
     const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
     const [loading, setLoading] = useState(false);
@@ -81,6 +83,28 @@ export const NavBar: React.FC = () => {
                 <NavLink to="/squads" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>ТОП ОТРЯДОВ</NavLink>
                 <NavLink to="/players" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>ТОП БОЙЦОВ</NavLink>
                 <NavLink to="/total-stats" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>СТАТИСТИКА СТОРОН</NavLink>
+            </div>
+
+            <div className="rotation-select-container" style={{ marginLeft: 'auto', marginRight: '15px' }}>
+                <select
+                    value={currentRotationId || ""}
+                    onChange={(e) => setRotation(e.target.value ? Number(e.target.value) : null)}
+                    style={{
+                        background: 'rgba(0, 0, 0, 0.5)',
+                        color: '#e0e0e0',
+                        border: '1px solid #444',
+                        padding: '5px 10px',
+                        borderRadius: '4px',
+                        fontFamily: 'Play, sans-serif'
+                    }}
+                >
+                    <option value="">Все Время (All Time)</option>
+                    {rotations.map(r => (
+                        <option key={r.id} value={r.id}>
+                            {r.name} {r.is_active ? '✅' : ''}
+                        </option>
+                    ))}
+                </select>
             </div>
 
             <div className="nav-search-container" ref={wrapperRef}>
