@@ -136,3 +136,173 @@ export const fetchTotalSquadStats = async (): Promise<TotalSquadsResponse> => {
         throw error;
     }
 };
+
+// --- Admin API ---
+
+export const adminLogin = async (username: string, password: string) => {
+    const response = await fetch(`${API_BASE}/admin/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+    });
+    if (!response.ok) throw new Error("Login failed");
+    return response.json();
+};
+
+export const adminLogout = async () => {
+    await fetch(`${API_BASE}/admin/auth/logout`, { method: 'POST' });
+};
+
+export const checkAdminAuth = async () => {
+    const response = await fetch(`${API_BASE}/admin/auth/me`);
+    if (!response.ok) throw new Error("Not authenticated");
+    return response.json();
+};
+
+export const getAdminSquads = async (skip = 0, limit = 50, search = '') => {
+    const response = await fetch(`${API_BASE}/admin/squads?skip=${skip}&limit=${limit}&search=${encodeURIComponent(search)}`);
+    if (!response.ok) throw new Error("Fetch squads failed");
+    return response.json(); // Returns {items, total}
+};
+
+export const addAdminSquad = async (name: string, tags: string[]) => {
+    const response = await fetch(`${API_BASE}/admin/squads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, tags })
+    });
+    if (!response.ok) throw new Error("Add squad failed");
+    return response.json();
+};
+
+export const deleteAdminSquad = async (name: string) => {
+    const response = await fetch(`${API_BASE}/admin/squads/${name}`, {
+        method: 'DELETE'
+    });
+    if (!response.ok) throw new Error("Delete squad failed");
+    return response.json();
+};
+
+export const getAdminMissions = async (skip = 0, limit = 50, search = '') => {
+    const response = await fetch(`${API_BASE}/admin/missions?skip=${skip}&limit=${limit}&search=${encodeURIComponent(search)}`);
+    if (!response.ok) throw new Error("Fetch missions failed");
+    return response.json(); // Returns {items, total}
+};
+
+export const updateAdminMission = async (id: number, data: any) => {
+    const response = await fetch(`${API_BASE}/admin/missions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error("Update mission failed");
+    return response.json();
+};
+
+export const deleteAdminMission = async (id: number) => {
+    const response = await fetch(`${API_BASE}/admin/missions/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error("Delete mission failed");
+    return response.json();
+};
+
+export const deleteAllMissions = async () => {
+    const response = await fetch(`${API_BASE}/admin/missions/all`, { method: 'DELETE' });
+    if (!response.ok) throw new Error("Delete all missions failed");
+    return response.json();
+};
+
+export const getAdminConfig = async () => {
+    const response = await fetch(`${API_BASE}/admin/config`);
+    if (!response.ok) throw new Error("Fetch config failed");
+    return response.json();
+};
+
+export const updateAdminConfig = async (key: string, value: string) => {
+    const response = await fetch(`${API_BASE}/admin/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value })
+    });
+    if (!response.ok) throw new Error("Update config failed");
+    return response.json();
+};
+
+export const deleteAdminConfig = async (key: string) => {
+    const response = await fetch(`${API_BASE}/admin/config/${key}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error("Delete config failed");
+    return response.json();
+};
+
+export const getAdminUsers = async () => {
+    const response = await fetch(`${API_BASE}/admin/users`);
+    if (!response.ok) throw new Error("Fetch users failed");
+    return response.json();
+};
+
+export const createAdminUser = async (username: string, password: string) => {
+    const response = await fetch(`${API_BASE}/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+    });
+    if (!response.ok) throw new Error("Create user failed");
+    return response.json();
+};
+
+export const deleteAdminUser = async (id: number) => {
+    const response = await fetch(`${API_BASE}/admin/users/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error("Delete user failed");
+    return response.json();
+};
+
+export const updateAdminUser = async (id: number, password: string) => {
+    const response = await fetch(`${API_BASE}/admin/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+    });
+    if (!response.ok) throw new Error("Update user failed");
+    return response.json();
+};
+
+export const getAdminPlayers = async (skip = 0, limit = 50, search = '') => {
+    const response = await fetch(`${API_BASE}/admin/players?skip=${skip}&limit=${limit}&search=${encodeURIComponent(search)}`);
+    if (!response.ok) throw new Error("Fetch players failed");
+    return response.json(); // Returns {items, total}
+};
+
+export const updateAdminPlayer = async (id: number, data: any) => {
+    const response = await fetch(`${API_BASE}/admin/players/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error("Update player failed");
+    return response.json();
+};
+
+export const mergePlayers = async (source_name: string, target_name: string) => {
+    const response = await fetch(`${API_BASE}/admin/players/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_name, target_name })
+    });
+    if (!response.ok) throw new Error("Merge failed");
+    return response.json();
+};
+
+export const getMissionSquadStats = async (skip = 0, limit = 50, search = '') => {
+    const response = await fetch(`${API_BASE}/admin/mission_squad_stats?skip=${skip}&limit=${limit}&search=${encodeURIComponent(search)}`);
+    if (!response.ok) throw new Error("Fetch mission squad stats failed");
+    return response.json(); // Returns {items, total}
+};
+
+export const updateMissionSquadStat = async (id: number, data: any) => {
+    const response = await fetch(`${API_BASE}/admin/mission_squad_stats/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error("Update squad stat failed");
+    return response.json();
+};

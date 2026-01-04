@@ -32,6 +32,7 @@ node_modules/
 vostokstat.db
 verify_import.py
 requirements_fastapi.txt
+vostokstat.db
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

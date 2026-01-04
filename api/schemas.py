@@ -110,6 +110,7 @@ class PlayerSquadStats(BaseModel):
 
 class PlayerAggregatedStats(BaseModel):
     name: str
+    side: Optional[str] = None
     total_missions: int
     total_frags: int
     total_frags_veh: int

@@ -87,7 +87,7 @@ const TotalStats: React.FC = () => {
 
     return (
         <div className="container fade-in">
-            <h1 className="page-title">Итоговая статистика отрядов</h1>
+            <h1 className="page-title">Статистика Сторон</h1>
 
             <div className="summary-container">
                 {renderSummaryCard("Синие (WEST)", westSummary, "west-side-card")}

@@ -36,7 +36,7 @@ export const PlayerProfile: React.FC = () => {
 
     return (
         <div className="mission-detail">
-            <h2>Dossier: {profile.name}</h2>
+            <h2>{profile.name}</h2>
 
             <div className="profile-stats-grid">
                 <div className="stat-card">
@@ -81,6 +81,11 @@ export const PlayerProfile: React.FC = () => {
                     color: var(--color-text-muted);
                     font-weight: bold;
                 }
+                /* Custom grid for 6-column mission history */
+                .missions-history-table .table-header,
+                .missions-history-table .table-row {
+                    grid-template-columns: 3fr 1.5fr 1.2fr 0.7fr 0.7fr 0.7fr !important;
+                }
             `}</style>
 
             <h3>История Отрядов</h3>
@@ -104,7 +109,7 @@ export const PlayerProfile: React.FC = () => {
             </div>
 
             <h3>История Миссий</h3>
-            <div className="player-table">
+            <div className="player-table missions-history-table">
                 <div className="table-header">
                     <span>Миссия</span>
                     <span>Карта</span>

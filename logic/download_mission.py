@@ -98,10 +98,40 @@ def download_new_ocaps(mode="init"):
     return downloaded_files
 
 
+import threading
+
+# Lock to prevent concurrent execution of download/process
+DOWNLOAD_LOCK = threading.Lock()
+# Flag to indicate a full rebuild is in progress
+IS_REBUILDING = False
+
 def main(mode="init"):
-    new_ocaps = download_new_ocaps(mode=mode)
-    if not new_ocaps:
+    global IS_REBUILDING
+    
+    # If we are just updating, check if a full rebuild is busy
+    if mode == "update" and IS_REBUILDING:
+        print("Skipping 'update' because a full 'init' rebuild is in progress.")
         return
-    for ocap_file in new_ocaps:
-        print(f"Обрабатываем: {ocap_file.name}")
-        process_ocap(ocap_file)
+
+    print(f"Acquiring lock for main (mode={mode})...")
+    with DOWNLOAD_LOCK:
+        if mode == "init":
+            IS_REBUILDING = True
+        
+        try:
+            print(f"Lock acquired. Starting {mode}...")
+            new_ocaps = download_new_ocaps(mode=mode)
+            if not new_ocaps:
+                print(f"No new missions found for mode {mode}.")
+                return
+            
+            for ocap_file in new_ocaps:
+                print(f"Обрабатываем: {ocap_file.name}")
+                try:
+                    process_ocap(ocap_file)
+                except Exception as e:
+                    print(f"Skipping {ocap_file.name} due to error: {e}")
+        finally:
+            if mode == "init":
+                IS_REBUILDING = False
+                print("Rebuild finished. Updates enabled.")

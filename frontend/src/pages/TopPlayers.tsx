@@ -66,6 +66,8 @@ export const TopPlayers: React.FC = () => {
                     border-color: var(--color-text-muted);
                     font-weight: bold;
                 }
+                .text-west { color: #8cb9ff !important; }
+                .text-east { color: #ff8c8c !important; }
             `}</style>
 
             {loading ? (
@@ -85,7 +87,9 @@ export const TopPlayers: React.FC = () => {
                             className="table-row clickable-row"
                             onClick={() => navigate(`/players/${getCleanName(p.name)}`)}
                         >
-                            <span>{formatPlayerName(p.name)}</span>
+                            <span className={p.side === 'WEST' ? 'text-west' : p.side === 'EAST' ? 'text-east' : ''}>
+                                {formatPlayerName(p.name)}
+                            </span>
                             <span>{p.total_missions}</span>
                             <span>{p.total_frags}</span>
                             <span>{p.total_deaths}</span>

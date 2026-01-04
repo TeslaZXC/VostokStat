@@ -3,7 +3,7 @@ from typing import List, Optional
 from sqlalchemy.future import select
 from sqlalchemy import func, case, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db, PlayerStat, Mission
+from database import get_db, PlayerStat, Mission, GlobalSquad, MissionSquadStat
 from api.schemas import PlayerAggregatedStats
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -145,8 +145,30 @@ async def get_player_stats(player_name_or_id: str, db: AsyncSession = Depends(ge
 
 @router.get("/top/", response_model=List[PlayerAggregatedStats])
 async def get_top_players(category: str = "general", limit: int = 10, db: AsyncSession = Depends(get_db)):
+    # 0. Get Squad Mappings (to know which squads are WEST/EAST)
+    # We can't import get_squad_mappings from .squads easily due to circular deps if not careful.
+    # So we re-query GlobalSquad here.
+    stmt_sq = select(GlobalSquad)
+    res_sq = await db.execute(stmt_sq)
+    all_squads = res_sq.scalars().all()
     
-    # Define KD expression
+    # Map: lower(tag) -> side
+    tag_side_map = {}
+    for sq in all_squads:
+        if not sq.name: continue
+        side = sq.side
+        if not side: continue
+        
+        # Tags associated
+        tags = [sq.name.lower()]
+        if sq.tags:
+            for t in sq.tags:
+                tags.append(t.strip().lower())
+                
+        for t in tags:
+            tag_side_map[t] = side
+
+    # 1. Define KD expression
     kd_expr = case(
         (func.sum(PlayerStat.death) > 0, func.sum(PlayerStat.frags) / func.sum(PlayerStat.death)),
         else_=func.sum(PlayerStat.frags)
@@ -180,10 +202,54 @@ async def get_top_players(category: str = "general", limit: int = 10, db: AsyncS
     result = await db.execute(query)
     rows = result.all()
     
+    if not rows:
+        return []
+        
+    # 2. Determine Side for these Top Players
+    # We find the side they played ON THE MOST.
+    # We join PlayerStat -> MissionSquadStat on (mission_id, squad match)
+    # Note: PlayerStat.squad matches MissionSquadStat.squad_tag (due to process_ocap normalization)
+    
+    player_names = [r.name for r in rows]
+    
+    stmt_side_usage = (
+        select(
+            PlayerStat.name,
+            MissionSquadStat.side,
+            func.count(PlayerStat.mission_id).label("cnt")
+        )
+        .join(MissionSquadStat, 
+              (PlayerStat.mission_id == MissionSquadStat.mission_id) & 
+              (func.lower(PlayerStat.squad) == func.lower(MissionSquadStat.squad_tag))
+        )
+        .filter(PlayerStat.name.in_(player_names))
+        .filter(MissionSquadStat.side.isnot(None))
+        .group_by(PlayerStat.name, MissionSquadStat.side)
+        .order_by(PlayerStat.name, desc("cnt"))
+    )
+    
+    side_res = await db.execute(stmt_side_usage)
+    side_rows = side_res.all()
+    
+    player_side_map = {} 
+    seen_players = set()
+    
+    for row in side_rows:
+        p_name = row.name
+        if p_name in seen_players:
+            continue
+            
+        seen_players.add(p_name)
+        # First row is the most played side
+        player_side_map[p_name] = row.side
+
     output = []
     for r in rows:
+        side = player_side_map.get(r.name)
+        
         output.append({
             "name": r.name,
+            "side": side,
             "total_missions": r.total_missions,
             "total_frags": r.total_frags or 0,
             "total_frags_veh": r.total_frags_veh or 0,

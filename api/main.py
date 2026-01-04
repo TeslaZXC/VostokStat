@@ -67,7 +67,7 @@ app.add_middleware(SessionMiddleware, secret_key="vostok-secret-key-secure")
 authentication_backend = AdminAuth(secret_key="vostok-secret-key-secure")
 
 templates_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
-admin_app = Admin(app, engine, templates_dir=templates_dir, authentication_backend=authentication_backend)
+admin_app = Admin(app, engine, base_url="/sqladmin", templates_dir=templates_dir, authentication_backend=authentication_backend)
 admin_app.add_view(MissionAdmin)
 admin_app.add_view(PlayerStatAdmin)
 admin_app.add_view(MissionSquadStatAdmin)

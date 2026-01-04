@@ -80,15 +80,28 @@ def process_ocap(ocap_file: Path):
         world_name = raw_data.get("worldName", "Unknown World")
         map_name = world_name
         
-        # We assume auto-increment ID handled by DB, need to flush to get ID if needed?
-        # Actually standard SQLite doesn't need our manual ID management like Mongo.
+        # --- SQUAD MAPPING INITIALIZATION ---
+        global_squads = session.query(GlobalSquad).all()
+        squad_map = {}
+        for gs in global_squads:
+            squad_map[gs.name.lower()] = gs.name
+            if gs.tags:
+                for tag in gs.tags:
+                    squad_map[tag.lower()] = gs.name
 
         players_stats: dict[int, dict] = {}
-        unique_players: dict[str, dict] = {} # Map Name -> Stats Object (for deduplication)
+        unique_players: dict[str, dict] = {} # Map Name -> Stats Object
 
         for p in ocap.players.values():
             clean_name, squad = extract_name_and_squad(p.name)
-            squad_tag = squad.lower() if squad else None
+            
+            # Normalize and Map Squad
+            squad_tag = squad.upper() if squad else None
+            if squad_tag:
+                lower_tag = squad_tag.lower()
+                if lower_tag in squad_map:
+                    squad_tag = squad_map[lower_tag]
+
             distance = get_player_distance(p, map_name)
 
             if clean_name in unique_players:
@@ -96,8 +109,13 @@ def process_ocap(ocap_file: Path):
                  existing = unique_players[clean_name]
                  existing["distance"] += distance
                  players_stats[p.id] = existing
+                 
+                 # Simple Update: If this player instance has a squad, update the main record
+                 # This handles "Joined as Skala -> Rejoined as 1437". 1437 will overwrite Skala.
+                 if squad_tag:
+                     existing["squad"] = squad_tag
             else:
-                new_stats = {
+                 new_stats = {
                     "id": p.id,
                     "name": clean_name,
                     "side": str(p.side),
@@ -112,8 +130,8 @@ def process_ocap(ocap_file: Path):
                     "destroyed_veh": 0,
                     "distance": distance
                 }
-                unique_players[clean_name] = new_stats
-                players_stats[p.id] = new_stats
+                 unique_players[clean_name] = new_stats
+                 players_stats[p.id] = new_stats
 
         for e in ocap.events:
             killed = getattr(e, "killed", None)
@@ -134,7 +152,7 @@ def process_ocap(ocap_file: Path):
                 killer_stats["destroyed_veh"] += 1
                 killer_stats["destroyed_vehicles"].append({
                     "name": getattr(killed, "name", "unknown"),
-                    "veh_type": str(getattr(killed, "vehicle_type", "unknown")),
+                    "veh_type": str(getattr(killed, "vehicle_type", "unknown"),),
                     "weapon": weapon_name,
                     "distance": distance_kill,
                     "kill_type": "veh",
@@ -173,63 +191,30 @@ def process_ocap(ocap_file: Path):
 
         for stats in unique_players.values():
             stats["frags"] = stats["frags_inf"] + stats["frags_veh"] - stats["tk"]
-
-        win_side = None
-        for event in raw_data.get("events", []):
-            if isinstance(event, list) and len(event) >= 2 and event[1] == "endMission":
-                win_side = event[2][0] if len(event) > 2 and isinstance(event[2], list) else None
-                break
-
-        # SQUAD MAPPING
-        squad_map = {}
-        # Fetch all global squads
-        all_squads = session.query(GlobalSquad).all()
-        for sq in all_squads:
-            s_tags = sq.tags
-            if not s_tags: 
-                s_tags = []
-            if sq.name:
-                for t in s_tags:
-                    squad_map[t.lower()] = sq.name
         
-        valid_squads = set(squad_map.values())
-
         total_players = 0
         side_counts = {"WEST": 0, "EAST": 0, "GUER": 0}
 
+        # Calculate Squad Stats & Side Counts
+        squads_stats: dict[str, dict] = {}
+        
         for player in unique_players.values():
-            squad_tag = player["squad"]
-            
-            # 1. Map to canonical if exists
-            if squad_tag and squad_tag in squad_map:
-                 player["squad"] = squad_map[squad_tag]
-            
-            # 2. Proceed
             total_players += 1
             side = str(player["side"]).upper()
-            if side == "WEST":
-                side_counts["WEST"] += 1
-            elif side == "EAST":
-                side_counts["EAST"] += 1
-            elif side in ("GUER", "GUERR", "INDEP", "INDEPENDENT"):
-                side_counts["GUER"] += 1
-
-        squads_stats: dict[str, dict] = {}
-        for player in unique_players.values():
+            if side == "WEST": side_counts["WEST"] += 1
+            elif side == "EAST": side_counts["EAST"] += 1
+            elif side in ("GUER", "GUERR", "INDEP", "INDEPENDENT"): side_counts["GUER"] += 1
+            
             squad_tag = player["squad"]
             if not squad_tag:
                 continue
 
-            # We accept ALL squads now
             if squad_tag not in squads_stats:
                 squads_stats[squad_tag] = {
                     "squad_tag": squad_tag,
                     "side": player["side"],
-                    "frags": 0,
-                    "death": 0,
-                    "tk": 0,
-                    "victims_players": [],
-                    "squad_players": []
+                    "frags": 0, "death": 0, "tk": 0,
+                    "victims_players": [], "squad_players": []
                 }
 
             s = squads_stats[squad_tag]
@@ -238,7 +223,7 @@ def process_ocap(ocap_file: Path):
             s["tk"] += player["tk"]
 
             for v in player["victims_players"]:
-                s["victims_players"].append(v) # Full object
+                s["victims_players"].append(v)
 
             s["squad_players"].append({
                 "name": player["name"],
@@ -249,56 +234,38 @@ def process_ocap(ocap_file: Path):
             })
 
         # --- DB INSERTION ---
-        
+        win_side = None
+        for event in raw_data.get("events", []):
+            if isinstance(event, list) and len(event) >= 2 and event[1] == "endMission":
+                win_side = event[2][0] if len(event) > 2 and isinstance(event[2], list) else None
+                break
+
         new_mission = Mission(
-            file_name=ocap_file.name,
-            file_date=file_date,
-            mission_name=mission_name,
-            world_name=world_name,
-            map_name=map_name,
-            game_type=ocap.game_type,
-            duration_frames=ocap.max_frame,
-            duration_time=round(ocap.max_frame / 49, 2),
-            win_side=str(win_side) if win_side else None,
-            total_players=total_players,
-            west_count=side_counts["WEST"],
-            east_count=side_counts["EAST"],
-            guer_count=side_counts["GUER"]
+            file_name=ocap_file.name, file_date=file_date, mission_name=mission_name,
+            world_name=world_name, map_name=map_name, game_type=ocap.game_type,
+            duration_frames=ocap.max_frame, duration_time=round(ocap.max_frame / 49, 2),
+            win_side=str(win_side) if win_side else None, total_players=total_players,
+            west_count=side_counts["WEST"], east_count=side_counts["EAST"], guer_count=side_counts["GUER"]
         )
         session.add(new_mission)
-        session.flush() # Get ID
+        session.flush()
 
         # Players
         for p in unique_players.values():
             ps = PlayerStat(
-                mission_id=new_mission.id,
-                player_uid=p["id"], # Careful if ID collision logic needed, but here it's per mission
-                name=p["name"],
-                side=str(p["side"]),
-                squad=p["squad"],
-                frags=p["frags"],
-                frags_veh=p["frags_veh"],
-                frags_inf=p["frags_inf"],
-                death=p["death"],
-                tk=p["tk"],
-                destroyed_veh=p["destroyed_veh"],
-                distance=p["distance"],
-                victims_players=p["victims_players"],
-                destroyed_vehicles=p["destroyed_vehicles"]
+                mission_id=new_mission.id, player_uid=p["id"], name=p["name"], side=str(p["side"]),
+                squad=p["squad"], frags=p["frags"], frags_veh=p["frags_veh"], frags_inf=p["frags_inf"],
+                death=p["death"], tk=p["tk"], destroyed_veh=p["destroyed_veh"], distance=p["distance"],
+                victims_players=p["victims_players"], destroyed_vehicles=p["destroyed_vehicles"]
             )
             session.add(ps)
 
         # Squads
         for sq in squads_stats.values():
             mss = MissionSquadStat(
-                mission_id=new_mission.id,
-                squad_tag=sq["squad_tag"],
-                side=str(sq["side"]),
-                frags=sq["frags"],
-                death=sq["death"],
-                tk=sq["tk"],
-                victims_players=sq["victims_players"],
-                squad_players=sq["squad_players"]
+                mission_id=new_mission.id, squad_tag=sq["squad_tag"], side=str(sq["side"]),
+                frags=sq["frags"], death=sq["death"], tk=sq["tk"],
+                victims_players=sq["victims_players"], squad_players=sq["squad_players"]
             )
             session.add(mss)
 
@@ -309,10 +276,8 @@ def process_ocap(ocap_file: Path):
         TEMP_PATH = Path(temp_path_str)
 
         for item in TEMP_PATH.iterdir():
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                shutil.rmtree(item)
+            if item.is_file(): item.unlink()
+            elif item.is_dir(): shutil.rmtree(item)
     
     except Exception as e:
         session.rollback()

@@ -80,7 +80,7 @@ export const NavBar: React.FC = () => {
                 <NavLink to="/missions" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>ОПЕРАЦИИ</NavLink>
                 <NavLink to="/squads" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>ТОП ОТРЯДОВ</NavLink>
                 <NavLink to="/players" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>ТОП БОЙЦОВ</NavLink>
-                <NavLink to="/total-stats" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>ОБЩАЯ СТАТИСТИКА</NavLink>
+                <NavLink to="/total-stats" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>СТАТИСТИКА СТОРОН</NavLink>
             </div>
 
             <div className="nav-search-container" ref={wrapperRef}>

@@ -166,7 +166,7 @@ export const MissionDetail: React.FC<MissionDetailProps> = ({ missionId, onBack 
                                     <span onClick={() => handleSort('name', squadMemberSort, setSquadMemberSort)}>Боец {renderSortArrow('name', squadMemberSort)}</span>
                                     <span onClick={() => handleSort('frags', squadMemberSort, setSquadMemberSort)}>Фраги {renderSortArrow('frags', squadMemberSort)}</span>
                                     <span onClick={() => handleSort('death', squadMemberSort, setSquadMemberSort)}>Смерти {renderSortArrow('death', squadMemberSort)}</span>
-                                    <span onClick={() => handleSort('distance', squadMemberSort, setSquadMemberSort)}>Дист. {renderSortArrow('distance', squadMemberSort)}</span>
+                                    <span onClick={() => handleSort('dk_ratio', squadMemberSort, setSquadMemberSort)}>K/D {renderSortArrow('dk_ratio', squadMemberSort)}</span>
                                 </div>
                                 {getSortedMembers(s.members || s.squad_players || []).map((m: any) => (
                                     <div key={m.name} className="inline-row">
@@ -184,7 +184,7 @@ export const MissionDetail: React.FC<MissionDetailProps> = ({ missionId, onBack 
                                         </div>
                                         <span>{m.frags}</span>
                                         <span>{m.death}</span>
-                                        <span>{m.distance.toFixed(0)}</span>
+                                        <span>{(m.frags / (m.death || 1)).toFixed(2)}</span>
                                     </div>
                                 ))}
                             </div>

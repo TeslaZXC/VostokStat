@@ -1,0 +1,195 @@
+/* Admin Panel Specific Styles - "Legacy/Bootstrap" Look */
+
+/* Global Reset for Admin Mode */
+body.admin-mode {
+    background-image: none !important;
+    background-color: #f4f6f9 !important;
+    color: #212529 !important;
+    display: block !important;
+    /* Override flex center */
+    margin: 0 !important;
+    min-height: 100vh !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+#root.admin-root {
+    display: block !important;
+    /* Override potential global root styles */
+    min-height: 100vh;
+}
+
+.admin-layout {
+    display: flex;
+    /* Sidebar + Content */
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #212529;
+    background-color: #f4f6f9;
+}
+
+.admin-sidebar {
+    width: 250px;
+    background-color: #343a40;
+    /* Dark sidebar */
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+.admin-header {
+    padding: 1rem;
+    font-size: 1.25rem;
+    border-bottom: 1px solid #4b545c;
+    background-color: #343a40;
+    color: rgba(255, 255, 255, .8);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.admin-nav {
+    padding: 0.5rem;
+    flex: 1;
+}
+
+.admin-nav-link {
+    display: block;
+    padding: 0.5rem 1rem;
+    color: #c2c7d0;
+    text-decoration: none;
+    border-radius: 0.25rem;
+    margin-bottom: 0.2rem;
+}
+
+.admin-nav-link:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, .1);
+}
+
+.admin-nav-link.active {
+    background-color: #007bff;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 1px 2px rgba(0, 0, 0, .24);
+}
+
+.admin-content {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+    background-color: #f4f6f9;
+}
+
+.admin-card {
+    background: #fff;
+    border-top: 3px solid #007bff;
+    box-shadow: 0 0 1px rgba(0, 0, 0, .125), 0 1px 3px rgba(0, 0, 0, .2);
+    border-radius: 0.25rem;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.admin-title {
+    font-size: 1.8rem;
+    margin-bottom: 1rem;
+    color: #212529;
+    font-weight: 500;
+}
+
+/* Tables */
+.admin-table-container {
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+}
+
+.admin-table {
+    width: 100%;
+    margin-bottom: 1rem;
+    color: #212529;
+    border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+    padding: 0.75rem;
+    vertical-align: top;
+    border-top: 1px solid #dee2e6;
+}
+
+.admin-table thead th {
+    vertical-align: bottom;
+    border-bottom: 2px solid #dee2e6;
+    background-color: #fff;
+    color: #212529;
+    text-align: left;
+    font-weight: 600;
+}
+
+.admin-table tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, .05);
+}
+
+.admin-table tbody tr:hover {
+    background-color: rgba(0, 0, 0, .075);
+}
+
+/* Forms */
+.admin-input {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+
+.admin-input:focus {
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, .25);
+}
+
+.admin-btn {
+    display: inline-block;
+    font-weight: 400;
+    color: #212529;
+    text-align: center;
+    vertical-align: middle;
+    user-select: none;
+    background-color: transparent;
+    border: 1px solid transparent;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+
+.admin-btn-primary {
+    color: #fff;
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.admin-btn-primary:hover {
+    background-color: #0069d9;
+    border-color: #0062cc;
+}
+
+.admin-btn-danger {
+    color: #fff;
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.admin-btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
