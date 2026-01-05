@@ -111,6 +111,7 @@ class PlayerSquadStats(BaseModel):
 class PlayerAggregatedStats(BaseModel):
     name: str
     side: Optional[str] = None
+    last_squad: Optional[str] = None # Added for [TAG] Name display
     total_missions: int
     total_frags: int
     total_frags_veh: int

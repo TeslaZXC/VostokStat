@@ -142,7 +142,9 @@ async def get_player_stats(player_name_or_id: str, rotation_id: Optional[int] = 
             Mission.file_date,
             Mission.duration_time,
             PlayerStat.frags,
-            PlayerStat.death
+            PlayerStat.death,
+            PlayerStat.squad,      # Added squad fetching
+            PlayerStat.side        # Added side fetching
         )
         .join(PlayerStat, PlayerStat.mission_id == Mission.id)
         .filter(func.lower(PlayerStat.name) == name_lower)
@@ -161,11 +163,18 @@ async def get_player_stats(player_name_or_id: str, rotation_id: Optional[int] = 
     missions_rows = res_missions.all()
     
     missions_list = []
+    side_counts = {}
+
     for m in missions_rows:
         fr = m.frags or 0
         d = m.death or 0
         kd = round(fr / d, 2) if d > 0 else float(fr)
         
+        # Count Side
+        if m.side:
+            s_up = str(m.side).upper()
+            side_counts[s_up] = side_counts.get(s_up, 0) + 1
+
         missions_list.append({
             "mission_id": m.id,
             "mission_name": m.mission_name,
@@ -177,11 +186,19 @@ async def get_player_stats(player_name_or_id: str, rotation_id: Optional[int] = 
             "kd": kd
         })
 
+    last_squad_tag = missions_rows[0].squad if missions_rows else None
+    
+    main_side = None
+    if side_counts:
+        main_side = max(side_counts, key=side_counts.get)
+
     return {
         "name": player_name_or_id, # return input name properly cased? Or fetch real name? 
                                    # We query lower(), so original casing might be lost if we don't fetch 'name' column.
                                    # But since we aggregated, we didn't group by name.
                                    # Let's trust the input or we could do select(PlayerStat.name).limit(1)
+        "side": main_side,
+        "last_squad": last_squad_tag,
         "total_missions": total_stats.total_missions,
         "total_frags": t_frags,
         "total_frags_veh": total_stats.total_frags_veh or 0,
@@ -288,43 +305,67 @@ async def get_top_players(category: str = "general", limit: int = 10, rotation_i
     
     player_names = [r.name for r in rows]
     
-    stmt_side_usage = (
+    # 2. Determine Side & Last Squad
+    # Fetch all mission participations for these players to determine Side (most played) and Last Squad
+    # 2. Determine Side & Last Squad
+    # Fetch all mission participations for these players to determine Side (most played) and Last Squad
+    stmt_meta = (
         select(
             PlayerStat.name,
-            MissionSquadStat.side,
-            func.count(PlayerStat.mission_id).label("cnt")
+            PlayerStat.squad,
+            MissionSquadStat.side.label("squad_side"),
+            PlayerStat.side.label("player_side"),
+            Mission.file_date
         )
+        .join(Mission, PlayerStat.mission_id == Mission.id)
         .join(MissionSquadStat, 
               (PlayerStat.mission_id == MissionSquadStat.mission_id) & 
-              (func.lower(PlayerStat.squad) == func.lower(MissionSquadStat.squad_tag))
+              (func.lower(PlayerStat.squad) == func.lower(MissionSquadStat.squad_tag)), isouter=True
         )
         .filter(PlayerStat.name.in_(player_names))
-        .filter(MissionSquadStat.side.isnot(None))
-        .group_by(PlayerStat.name, MissionSquadStat.side)
-        .order_by(PlayerStat.name, desc("cnt"))
+        .order_by(desc(Mission.file_date))
     )
     
-    side_res = await db.execute(stmt_side_usage)
-    side_rows = side_res.all()
+    meta_res = await db.execute(stmt_meta)
+    meta_rows = meta_res.all()
     
-    player_side_map = {} 
-    seen_players = set()
+    player_side_counts = {} # Name -> {West: 5, East: 2...}
+    player_last_squad = {}  # Name -> Tag
     
-    for row in side_rows:
+    for row in meta_rows:
         p_name = row.name
-        if p_name in seen_players:
-            continue
+        
+        # Last Squad (First time we see this player, since ordered by date desc)
+        if p_name not in player_last_squad and row.squad:
+             player_last_squad[p_name] = row.squad
+        
+        # Side Counts
+        # Prefer Squad Side if available (more 'official'), else Player Side
+        eff_side = row.squad_side or row.player_side
+        
+        if eff_side:
+            if p_name not in player_side_counts:
+                player_side_counts[p_name] = {}
             
-        seen_players.add(p_name)
-        player_side_map[p_name] = row.side
+            s = str(eff_side).upper()
+            player_side_counts[p_name][s] = player_side_counts[p_name].get(s, 0) + 1
 
     output = []
     for r in rows:
-        side = player_side_map.get(r.name)
+        # Determine main side
+        side = None
+        if r.name in player_side_counts:
+             # Get key with max value
+             counts = player_side_counts[r.name]
+             if counts:
+                 side = max(counts, key=counts.get)
         
+        last_squad = player_last_squad.get(r.name)
+
         output.append({
             "name": r.name,
             "side": side,
+            "last_squad": last_squad,
             "total_missions": r.total_missions,
             "total_frags": r.total_frags or 0,
             "total_frags_veh": r.total_frags_veh or 0,

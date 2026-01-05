@@ -38,7 +38,10 @@ export const PlayerProfile: React.FC = () => {
 
     return (
         <div className="mission-detail">
-            <h2>{profile.name}</h2>
+            <h2 className={profile.side === 'WEST' ? 'text-west' : profile.side === 'EAST' ? 'text-east' : ''}>
+                {profile.last_squad ? `[${profile.last_squad}] ` : ''}
+                {profile.name}
+            </h2>
 
             <div className="profile-stats-grid">
                 <div className="stat-card">
@@ -88,6 +91,8 @@ export const PlayerProfile: React.FC = () => {
                 .missions-history-table .table-row {
                     grid-template-columns: 3fr 1.5fr 1.2fr 0.7fr 0.7fr 0.7fr !important;
                 }
+                .text-west { color: #8cb9ff !important; }
+                .text-east { color: #ff8c8c !important; }
             `}</style>
 
             <h3>История Отрядов</h3>
@@ -100,7 +105,11 @@ export const PlayerProfile: React.FC = () => {
                     <span>K/D</span>
                 </div>
                 {profile.squads?.map(s => (
-                    <div key={s.squad} className="table-row">
+                    <div
+                        key={s.squad}
+                        className="table-row clickable-row"
+                        onClick={() => navigate(`/squads/${encodeURIComponent(s.squad)}`)}
+                    >
                         <span>{s.squad}</span>
                         <span>{s.total_missions}</span>
                         <span>{s.total_frags}</span>

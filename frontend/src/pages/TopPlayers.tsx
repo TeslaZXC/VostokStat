@@ -91,7 +91,7 @@ export const TopPlayers: React.FC = () => {
                             onClick={() => navigate(`/players/${getCleanName(p.name)}`)}
                         >
                             <span className={p.side === 'WEST' ? 'text-west' : p.side === 'EAST' ? 'text-east' : ''}>
-                                {formatPlayerName(p.name)}
+                                {p.last_squad ? `[${p.last_squad}] ` : ''}{formatPlayerName(p.name)}
                             </span>
                             <span>{p.total_missions}</span>
                             <span>{p.total_frags}</span>

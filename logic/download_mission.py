@@ -41,9 +41,13 @@ def download_new_ocaps(mode="init"):
     }
     
     print(f"Запрос миссий: {ocaps_url} с параметрами {params}")
-    response = requests.get(ocaps_url, params=params)
-    response.raise_for_status()
-    ocaps_list = response.json()
+    try:
+        response = requests.get(ocaps_url, params=params, timeout=10)
+        response.raise_for_status()
+        ocaps_list = response.json()
+    except requests.RequestException as e:
+        print(f"Ошибка соединения с сервером обновлений: {e}")
+        return []
 
     filtered_ocaps = []
     for o in ocaps_list:
@@ -87,7 +91,7 @@ def download_new_ocaps(mode="init"):
         filepath = OCAPS_PATH / new_filename
         try:
             print(f"Скачиваем: {new_filename}")
-            r = requests.get(ocap_url_template % ocap["filename"])
+            r = requests.get(ocap_url_template % ocap["filename"], timeout=60)
             r.raise_for_status()
             filepath.write_text(r.text, encoding="utf-8")
             sleep(1)

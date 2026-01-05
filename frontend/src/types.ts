@@ -78,6 +78,7 @@ export interface SquadAggregatedStats {
 export interface PlayerAggregatedStats {
     name: string;
     side?: string;
+    last_squad?: string;
     total_missions: number;
     total_frags: number;
     total_frags_veh: number;
