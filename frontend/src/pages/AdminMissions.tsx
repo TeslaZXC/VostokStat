@@ -3,7 +3,6 @@ import { getAdminMissions, deleteAdminMission, deleteAllMissions, updateAdminMis
 import { AdminPagination } from '../components/AdminPagination';
 import { AdminPlayersList } from '../components/AdminPlayersList';
 import { AdminSquadStatsList } from '../components/AdminSquadStatsList';
-import { useNavigate } from 'react-router-dom';
 
 interface Mission {
     id: number;
@@ -24,7 +23,6 @@ const AdminMissions: React.FC = () => {
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
 
-    const navigate = useNavigate();
 
     // Edit State
     const [editId, setEditId] = useState<number | null>(null);
@@ -130,19 +128,19 @@ const AdminMissions: React.FC = () => {
 
                         {/* Tabs */}
                         <div className="admin-tabs">
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('info')}
                                 className={`admin-tab ${activeTab === 'info' ? 'active' : ''}`}
                             >
                                 Основное
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('players')}
                                 className={`admin-tab ${activeTab === 'players' ? 'active' : ''}`}
                             >
                                 Игроки
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('squads')}
                                 className={`admin-tab ${activeTab === 'squads' ? 'active' : ''}`}
                             >

@@ -287,8 +287,10 @@ export const updateAdminUser = async (id: number, password: string) => {
     return response.json();
 };
 
-export const getAdminPlayers = async (skip = 0, limit = 50, search = '') => {
-    const response = await fetch(`${API_BASE}/admin/players?skip=${skip}&limit=${limit}&search=${encodeURIComponent(search)}`);
+export const getAdminPlayers = async (skip = 0, limit = 50, search = '', missionId: number | null = null) => {
+    let url = `${API_BASE}/admin/players?skip=${skip}&limit=${limit}&search=${encodeURIComponent(search)}`;
+    if (missionId) url += `&mission_id=${missionId}`;
+    const response = await fetch(url);
     if (!response.ok) throw new Error("Fetch players failed");
     return response.json(); // Returns {items, total}
 };
@@ -313,8 +315,10 @@ export const mergePlayers = async (source_name: string, target_name: string) => 
     return response.json();
 };
 
-export const getMissionSquadStats = async (skip = 0, limit = 50, search = '') => {
-    const response = await fetch(`${API_BASE}/admin/mission_squad_stats?skip=${skip}&limit=${limit}&search=${encodeURIComponent(search)}`);
+export const getMissionSquadStats = async (skip = 0, limit = 50, search = '', missionId: number | null = null) => {
+    let url = `${API_BASE}/admin/mission_squad_stats?skip=${skip}&limit=${limit}&search=${encodeURIComponent(search)}`;
+    if (missionId) url += `&mission_id=${missionId}`;
+    const response = await fetch(url);
     if (!response.ok) throw new Error("Fetch mission squad stats failed");
     return response.json(); // Returns {items, total}
 };
