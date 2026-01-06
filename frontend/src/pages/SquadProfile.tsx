@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useRotation } from '../context/RotationContext';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchSquadProfile, fetchTotalSquadStats } from '../api';
+import { fetchSquadProfile } from '../api';
 import { formatPlayerName, getCleanName } from '../utils';
-import type { SquadStats, TotalSquadsResponse } from '../api';
+import type { SquadStats } from '../api';
 import '../components/MissionDetail.css';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
