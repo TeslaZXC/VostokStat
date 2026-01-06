@@ -10,3 +10,5 @@ python-multipart
 jinja2
 starlette
 itsdangerous
+apscheduler
+httpx

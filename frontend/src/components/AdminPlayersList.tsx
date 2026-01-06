@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAdminPlayers, updateAdminPlayer } from '../api';
 import { AdminPagination } from '../components/AdminPagination';
+import { formatPlayerName } from '../utils';
 
 interface Player {
     id: number;
@@ -131,7 +132,7 @@ export const AdminPlayersList: React.FC<Props> = ({ missionId }) => {
                         {loading ? <tr><td colSpan={6}>Загрузка...</td></tr> : players.map(p => (
                             <tr key={p.id}>
                                 <td>{p.id}</td>
-                                <td>{p.name}</td>
+                                <td>{formatPlayerName(p.name, p.squad)}</td>
                                 <td>{p.squad}</td>
                                 <td>{p.side}</td>
                                 <td>{p.mission_id}</td>

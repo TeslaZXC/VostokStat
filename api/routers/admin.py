@@ -1,12 +1,15 @@
 from fastapi import APIRouter, HTTPException, Body, Depends, Request, Response, Query, BackgroundTasks
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from sqlalchemy.future import select
 from sqlalchemy import delete, update, func, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db, GlobalSquad, AdminUser, AsyncSessionLocal, Mission, PlayerStat, AppConfig, engine
+from database import get_db, GlobalSquad, AdminUser, AsyncSessionLocal, Mission, PlayerStat, AppConfig, engine, get_app_config_sync
 import bcrypt
+import os
 from logic.download_mission import main as download_main
+from logic.backup import create_backup_zip, run_backup_task
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -409,3 +412,41 @@ async def update_user(id: int, user: AdminUserUpdate, db: AsyncSession = Depends
         
     await db.commit()
     return {"message": "User updated"}
+
+
+# --- Backup Management ---
+BACKUP_DIR = "backups"
+
+@router.get("/backups")
+async def list_backups(admin: str = Depends(get_current_admin)):
+    if not os.path.exists(BACKUP_DIR):
+        return []
+    
+    files = []
+    for f in os.listdir(BACKUP_DIR):
+        if f.endswith(".zip"):
+            path = os.path.join(BACKUP_DIR, f)
+            stat = os.stat(path)
+            files.append({
+                "name": f,
+                "size": stat.st_size,
+                "created": stat.st_mtime
+            })
+    
+    # Sort by creation time desc
+    files.sort(key=lambda x: x["created"], reverse=True)
+    return files
+
+@router.post("/backups/trigger")
+async def trigger_backup(background_tasks: BackgroundTasks, admin: str = Depends(get_current_admin)):
+    """Manually trigger backup and send to telegram"""
+    background_tasks.add_task(run_backup_task, get_app_config_sync)
+    return {"message": "Backup task started in background"}
+
+@router.get("/backups/download/{filename}")
+async def download_backup(filename: str, admin: str = Depends(get_current_admin)):
+    file_path = os.path.join(BACKUP_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Backup not found")
+    
+    return FileResponse(file_path, filename=filename)

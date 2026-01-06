@@ -10,6 +10,16 @@ export interface MissionPerformance {
     frags: number;
     deaths: number;
     kd: number;
+    squad?: string;
+    side?: string;
+}
+
+export interface TimelineSegment {
+    squad: string;
+    start_date: string;
+    end_date: string;
+    days: number;
+    mission_count: number;
 }
 
 export interface PlayerAggregatedStats {
@@ -34,6 +44,7 @@ export interface PlayerAggregatedStats {
         kd_ratio: number;
     }[];
     missions?: MissionPerformance[];
+    timeline?: TimelineSegment[];
 }
 
 export interface SquadMember {
@@ -255,6 +266,24 @@ export const deleteAdminConfig = async (key: string) => {
     return response.json();
 };
 
+// Backups
+export interface BackupFile {
+    name: string;
+    size: number;
+    created: number;
+}
+export const getBackups = async (): Promise<BackupFile[]> => {
+    const response = await fetch(`${API_BASE}/admin/backups`);
+    if (!response.ok) throw new Error("Fetch backups failed");
+    return response.json();
+};
+export const triggerBackup = async (): Promise<any> => {
+    const response = await fetch(`${API_BASE}/admin/backups/trigger`, { method: 'POST' });
+    if (!response.ok) throw new Error("Trigger backup failed");
+    return response.json();
+};
+export const getBackupDownloadUrl = (filename: string) => `${API_BASE}/admin/backups/download/${filename}`;
+
 export const getAdminUsers = async () => {
     const response = await fetch(`${API_BASE}/admin/users`);
     if (!response.ok) throw new Error("Fetch users failed");
@@ -382,3 +411,6 @@ export const deleteRotation = async (id: number) => {
     if (!response.ok) throw new Error("Delete rotation failed");
     return response.json();
 };
+
+export const getConfig = getAdminConfig;
+export const updateConfig = updateAdminConfig;

@@ -33,6 +33,7 @@ vostokstat.db
 verify_import.py
 requirements_fastapi.txt
 vostokstat.db
+backup_debug.log
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

@@ -17,17 +17,20 @@ export const formatDuration = (frames: number): string => {
 };
 
 export const formatPlayerName = (name: string, squad?: string | null): string => {
+    // Helper to capitalize first letter
+    const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
+
     // If name already contains a tag like [TAG] Name, maybe just uppercase it?
     // But for now, if squad is explicitly provided, use it.
     if (squad) {
-        return `[${squad.toUpperCase()}] ${name}`;
+        return `[${squad.toUpperCase()}] ${capitalize(name)}`;
     }
-    // If no squad provided, try to uppercase existing tag if present
+    // If no squad provided, try to uppercase existing tag if present and capitalize name
     const tagMatch = name.match(/^\[(.*?)\]\s*(.*)$/);
     if (tagMatch) {
-        return `[${tagMatch[1].toUpperCase()}] ${tagMatch[2]}`;
+        return `[${tagMatch[1].toUpperCase()}] ${capitalize(tagMatch[2])}`;
     }
-    return name;
+    return capitalize(name);
 };
 
 export const getCleanName = (name: string): string => {

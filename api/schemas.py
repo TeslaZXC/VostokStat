@@ -97,6 +97,8 @@ class MissionPerformance(BaseModel):
     frags: int
     deaths: int
     kd: float
+    squad: Optional[str] = None
+    side: Optional[str] = None
 
 class PlayerSquadStats(BaseModel):
     squad: str
@@ -107,6 +109,13 @@ class PlayerSquadStats(BaseModel):
     total_deaths: int
     total_destroyed_vehicles: int
     kd_ratio: float
+
+class TimelineSegment(BaseModel):
+    squad: str
+    start_date: str
+    end_date: str
+    days: int
+    mission_count: int
 
 class PlayerAggregatedStats(BaseModel):
     name: str
@@ -121,6 +130,7 @@ class PlayerAggregatedStats(BaseModel):
     kd_ratio: float
     squads: List[PlayerSquadStats] = []
     missions: List[MissionPerformance] = []
+    timeline: List[TimelineSegment] = []
 
 class SideMissionStat(BaseModel):
     date: str

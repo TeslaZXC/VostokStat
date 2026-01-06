@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchPlayerProfile } from '../api';
 import { useRotation } from '../context/RotationContext';
+import { formatPlayerName } from '../utils';
 import type { PlayerAggregatedStats } from '../api';
 import '../components/MissionDetail.css';
+import { SquadTimeline } from '../components/SquadTimeline';
 
 export const PlayerProfile: React.FC = () => {
     const { name } = useParams<{ name: string }>();
@@ -12,6 +14,7 @@ export const PlayerProfile: React.FC = () => {
     const [profile, setProfile] = useState<PlayerAggregatedStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [selectedSquad, setSelectedSquad] = useState<string>('ALL'); // 'ALL' or squad name
 
     useEffect(() => {
         if (!name) return;
@@ -22,6 +25,12 @@ export const PlayerProfile: React.FC = () => {
             try {
                 const data = await fetchPlayerProfile(name, currentRotationId);
                 setProfile(data);
+                // Default to last_squad if available, else ALL
+                if (data.last_squad) {
+                    setSelectedSquad(data.last_squad);
+                } else {
+                    setSelectedSquad('ALL');
+                }
             } catch {
                 setError('Operative not found or KIA.');
             } finally {
@@ -36,29 +45,90 @@ export const PlayerProfile: React.FC = () => {
     if (error) return <div className="error">{error}</div>;
     if (!profile) return null;
 
+    // Filter/Select Stats
+    const getDisplayedStats = () => {
+        if (selectedSquad === 'ALL') {
+            return {
+                label: 'ALL STATS',
+                missions: profile.total_missions,
+                frags: profile.total_frags,
+                deaths: profile.total_deaths,
+                kd: profile.kd_ratio,
+                armor: profile.total_destroyed_vehicles,
+                missionList: profile.missions || []
+            };
+        } else {
+            // Find stats for specific squad
+            const squadStats = profile.squads.find(s => s.squad === selectedSquad);
+            // Filter missions for this squad
+            // Handle null/undefined squad in missions as 'No Squad' to match availableSquads
+            const filteredMissions = (profile.missions || []).filter(m => (m.squad || 'No Squad') === selectedSquad);
+
+            if (!squadStats) return null; // Should not happen
+
+            return {
+                label: selectedSquad,
+                missions: squadStats.total_missions,
+                frags: squadStats.total_frags,
+                deaths: squadStats.total_deaths,
+                kd: squadStats.kd_ratio,
+                armor: squadStats.total_destroyed_vehicles,
+                missionList: filteredMissions
+            };
+        }
+    };
+
+    const stats = getDisplayedStats();
+    if (!stats) return <div>Stats not found</div>;
+
+    // Unique squads for dropdown
+    const availableSquads = profile.squads.map(s => s.squad).sort();
+
     return (
         <div className="mission-detail">
-            <h2 className={profile.side === 'WEST' ? 'text-west' : profile.side === 'EAST' ? 'text-east' : ''}>
-                {profile.last_squad ? `[${profile.last_squad}] ` : ''}
-                {profile.name}
-            </h2>
+            <div className="profile-header-row" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <h2 className={profile.side === 'WEST' ? 'text-west' : profile.side === 'EAST' ? 'text-east' : ''} style={{ marginBottom: 0 }}>
+                    {profile.last_squad ? `[${profile.last_squad}] ` : ''}
+                    {formatPlayerName(profile.name)}
+                </h2>
+
+                <select
+                    className="squad-selector"
+                    value={selectedSquad}
+                    onChange={(e) => setSelectedSquad(e.target.value)}
+                >
+                    <option value="ALL">Вся статистика</option>
+                    <optgroup label="Отряды">
+                        {availableSquads.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                        ))}
+                    </optgroup>
+                </select>
+            </div>
+
+            {/* Timeline */}
+            <SquadTimeline
+                timeline={profile.timeline || []}
+                selectedSquad={selectedSquad}
+                onSelectSquad={setSelectedSquad}
+            />
 
             <div className="profile-stats-grid">
                 <div className="stat-card">
-                    <div className="label">Missions</div>
-                    <div className="value">{profile.total_missions}</div>
+                    <div className="label">Миссии ({selectedSquad === 'ALL' ? 'Всего' : selectedSquad})</div>
+                    <div className="value">{stats.missions}</div>
                 </div>
                 <div className="stat-card">
                     <div className="label">K/D Ratio</div>
-                    <div className="value">{profile.kd_ratio.toFixed(2)}</div>
+                    <div className="value">{stats.kd.toFixed(2)}</div>
                 </div>
                 <div className="stat-card">
-                    <div className="label">Total Frags</div>
-                    <div className="value">{profile.total_frags}</div>
+                    <div className="label">Фраги</div>
+                    <div className="value">{stats.frags}</div>
                 </div>
                 <div className="stat-card">
-                    <div className="label">Armor Kills</div>
-                    <div className="value">{profile.total_destroyed_vehicles}</div>
+                    <div className="label">Уничтожил Техники</div>
+                    <div className="value">{stats.armor}</div>
                 </div>
             </div>
 
@@ -93,33 +163,23 @@ export const PlayerProfile: React.FC = () => {
                 }
                 .text-west { color: #8cb9ff !important; }
                 .text-east { color: #ff8c8c !important; }
+                .squad-selector {
+                    padding: 0.5rem 1rem;
+                    background: rgba(0, 0, 0, 0.4);
+                    border: 1px solid #3c4238;
+                    color: #fff;
+                    font-size: 1rem;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    outline: none;
+                    min-width: 200px;
+                }
+                .squad-selector option {
+                    background: #1a1e1b;
+                }
             `}</style>
 
-            <h3>История Отрядов</h3>
-            <div className="player-table">
-                <div className="table-header">
-                    <span>Отряд</span>
-                    <span>Миссии</span>
-                    <span>Фраги</span>
-                    <span>Смерти</span>
-                    <span>K/D</span>
-                </div>
-                {profile.squads?.map(s => (
-                    <div
-                        key={s.squad}
-                        className="table-row clickable-row"
-                        onClick={() => navigate(`/squads/${encodeURIComponent(s.squad)}`)}
-                    >
-                        <span>{s.squad}</span>
-                        <span>{s.total_missions}</span>
-                        <span>{s.total_frags}</span>
-                        <span>{s.total_deaths}</span>
-                        <span>{s.kd_ratio.toFixed(2)}</span>
-                    </div>
-                ))}
-            </div>
-
-            <h3>История Миссий</h3>
+            <h3>История Миссий ({selectedSquad === 'ALL' ? 'Все' : selectedSquad})</h3>
             <div className="player-table missions-history-table">
                 <div className="table-header">
                     <span>Миссия</span>
@@ -129,7 +189,7 @@ export const PlayerProfile: React.FC = () => {
                     <span>Смерти</span>
                     <span>K/D</span>
                 </div>
-                {profile.missions?.map(m => (
+                {stats.missionList.map(m => (
                     <div
                         key={m.mission_id}
                         className="table-row clickable-row"

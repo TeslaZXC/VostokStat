@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useRotation } from '../context/RotationContext';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchSquadProfile } from '../api';
+import { fetchSquadProfile, fetchTotalSquadStats } from '../api';
 import { formatPlayerName, getCleanName } from '../utils';
+import type { SquadStats, TotalSquadsResponse } from '../api';
 import '../components/MissionDetail.css';
+import {
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 
-import type { SquadStats } from '../api';
-import '../components/MissionDetail.css';
 
 export const SquadProfile: React.FC = () => {
     const { name } = useParams<{ name: string }>();
@@ -14,16 +16,27 @@ export const SquadProfile: React.FC = () => {
     const { currentRotationId } = useRotation();
     const [stats, setStats] = useState<SquadStats | null>(null);
     const [loading, setLoading] = useState(true);
+
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 5;
 
     useEffect(() => {
-        if (!name) return;
-        fetchSquadProfile(name, currentRotationId)
-            .then(setStats)
-            .catch(console.error)
-            .finally(() => setLoading(false));
+        const load = async () => {
+            if (!name) return;
+            setLoading(true);
+            try {
+                // Fetch profile only
+                const profile = await fetchSquadProfile(name, currentRotationId);
+                setStats(profile);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
     }, [name, currentRotationId]);
+
 
     if (loading) return <div className="loading">Получение данных отряда...</div>;
     if (!stats) return <div className="error">Отряд не найден</div>;
@@ -33,7 +46,10 @@ export const SquadProfile: React.FC = () => {
 
     return (
         <div className="mission-detail">
-            <h2>ОТРЯД [{stats.squad_name.toUpperCase()}]</h2>
+            <div className="page-header-row" style={{ marginBottom: '2rem' }}>
+                <h2 style={{ margin: 0 }}>ОТРЯД [{stats.squad_name.toUpperCase()}]</h2>
+            </div>
+
 
             <div className="profile-stats-grid">
                 <div className="stat-card">
@@ -54,8 +70,30 @@ export const SquadProfile: React.FC = () => {
                 </div>
             </div>
 
+            {/* Chart Section */}
+            {stats.missions && stats.missions.length > 0 && (
+                <div className="chart-container" style={{ marginBottom: '2rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', border: '1px solid #3c4238', borderRadius: '8px' }}>
+                    <h3>Динамика фрагов</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={[...stats.missions].reverse()}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#444" />
+                            <XAxis dataKey="date" tickFormatter={(val) => val.split(' ')[0]} stroke="#888" />
+                            <YAxis stroke="#888" />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: '#1a1e1b', border: '1px solid #3c4238' }}
+                                labelStyle={{ color: '#e0e0e0' }}
+                            />
+                            <Legend />
+                            <Line type="monotone" dataKey="frags" name="Фраги" stroke="#007bff" strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="deaths" name="Смерти" stroke="#dc3545" strokeWidth={2} dot={false} />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+
             <div className="player-table">
                 <div className="table-header">
+
                     <span>Боец</span>
                     <span>Миссии</span>
                     <span>Фраги (Всего)</span>

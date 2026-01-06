@@ -9,6 +9,8 @@ import {
 
 import { useRotation } from '../context/RotationContext';
 
+import { SquadSelector } from '../components/SquadSelector';
+
 const TotalStats: React.FC = () => {
     const { currentRotationId } = useRotation();
     const [data, setData] = useState<TotalSquadsResponse | null>(null);
@@ -91,7 +93,10 @@ const TotalStats: React.FC = () => {
 
     return (
         <div className="container fade-in">
-            <h1 className="page-title">Статистика Сторон</h1>
+            <div className="page-header-row">
+                <h1 className="page-title">Статистика Сторон</h1>
+                <SquadSelector data={data} isLoading={loading} currentSquad={undefined} />
+            </div>
 
             <div className="summary-container">
                 {renderSummaryCard("Синие (WEST)", westSummary, "west-side-card")}
@@ -188,6 +193,18 @@ const TotalStats: React.FC = () => {
                 }
                 .west-side .side-title { color: #007bff; }
                 .east-side .side-title { color: #dc3545; }
+
+                .page-header-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 2rem;
+                    flex-wrap: wrap;
+                    gap: 1rem;
+                }
+                .page-header-row .page-title {
+                    margin-bottom: 0;
+                }
             `}</style>
         </div>
     );

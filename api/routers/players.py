@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
+from datetime import datetime
 from typing import List, Optional
 from sqlalchemy.future import select
 from sqlalchemy import func, case, desc, and_
@@ -183,7 +184,9 @@ async def get_player_stats(player_name_or_id: str, rotation_id: Optional[int] = 
             "duration_time": m.duration_time,
             "frags": fr,
             "deaths": d,
-            "kd": kd
+            "kd": kd,
+            "squad": m.squad,
+            "side": m.side
         })
 
     last_squad_tag = missions_rows[0].squad if missions_rows else None
@@ -192,13 +195,93 @@ async def get_player_stats(player_name_or_id: str, rotation_id: Optional[int] = 
     if side_counts:
         main_side = max(side_counts, key=side_counts.get)
 
+
+
+    # 4. Generate Timeline (Backend Calculation)
+    sorted_missions = sorted(missions_list, key=lambda x: x["date"]) # Oldest first
+    timeline = []
+    
+    if sorted_missions:
+        raw_runs = []
+        current_squad = sorted_missions[0]["squad"] or "No Squad"
+        run_start = sorted_missions[0]["date"]
+        run_last = sorted_missions[0]["date"]
+        count = 0
+        
+        for m in sorted_missions:
+            m_squad = m["squad"] or "No Squad"
+            m_date = m["date"]
+            
+            if m_squad != current_squad:
+                raw_runs.append({
+                    "squad": current_squad,
+                    "start_str": run_start,
+                    "end_str": run_last,
+                    "count": count
+                })
+                current_squad = m_squad
+                run_start = m_date
+                run_last = m_date
+                count = 0
+            else:
+                run_last = m_date
+            count += 1
+            
+        # Last run
+        raw_runs.append({
+            "squad": current_squad,
+            "start_str": run_start,
+            "end_str": run_last,
+            "count": count
+        })
+        
+        # Bridge gaps + Calculate Days
+        def parse_dt(d_str):
+            if isinstance(d_str, datetime):
+                return d_str
+            s = str(d_str).strip()
+            formats = [
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M",
+                "%Y-%m-%d",
+                "%Y-%m-%dT%H:%M:%S",
+                "%Y-%m-%d_%H-%M-%S", # Standard OCAP
+                "%Y_%m_%d",          # Fallback
+            ]
+            for fmt in formats:
+                try:
+                    return datetime.strptime(s, fmt)
+                except ValueError:
+                    continue
+            # Fallback if parsing fails - prevent 0 delta by returning consistent 'epoch' or similar? 
+            # Or log error. returning now() causes 1-day segments. 
+            print(f"Date parse error for: {d_str}")
+            return datetime.now()
+
+        for i in range(len(raw_runs)):
+            run = raw_runs[i]
+            s_date = parse_dt(run["start_str"])
+            
+            if i < len(raw_runs) - 1:
+                e_date = parse_dt(raw_runs[i+1]["start_str"]) # End is next Start
+            else:
+                # Last segment: extends to NOW (User request: "current date")
+                e_date = datetime.now()
+
+            delta = e_date - s_date
+            days = delta.days
+            if days < 1: days = 1
+            
+            timeline.append({
+                "squad": run["squad"],
+                "start_date": s_date.strftime("%Y-%m-%d %H:%M:%S"),
+                "end_date": e_date.strftime("%Y-%m-%d %H:%M:%S"),
+                "days": days,
+                "mission_count": run["count"]
+            })
+
     return {
-        "name": player_name_or_id, # return input name properly cased? Or fetch real name? 
-                                   # We query lower(), so original casing might be lost if we don't fetch 'name' column.
-                                   # But since we aggregated, we didn't group by name.
-                                   # Let's trust the input or we could do select(PlayerStat.name).limit(1)
-        "side": main_side,
-        "last_squad": last_squad_tag,
+        "name": player_name_or_id, 
         "total_missions": total_stats.total_missions,
         "total_frags": t_frags,
         "total_frags_veh": total_stats.total_frags_veh or 0,
@@ -206,9 +289,12 @@ async def get_player_stats(player_name_or_id: str, rotation_id: Optional[int] = 
         "total_deaths": t_deaths,
         "total_destroyed_vehicles": total_stats.total_destroyed_vehicles or 0,
         "kd_ratio": kd_ratio,
+        "last_squad": last_squad_tag,
         "squads": squads_list,
-        "missions": missions_list
+        "missions": missions_list,
+        "timeline": timeline
     }
+
 
 from datetime import datetime
 from sqlalchemy.orm import selectinload
